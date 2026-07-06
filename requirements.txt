@@ -1,0 +1,24 @@
+# Kang 2025 TJS_Prediction reproduction — direct dependencies.
+# Python 3.11.11 (paper-matched), venv managed with uv.
+#
+# Install (torch needs the cu128 index for RTX 5060 Ti / Blackwell sm_120):
+#   uv venv .venv --python 3.11.11
+#   uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128 --python .venv
+#   uv pip install -r requirements.txt --python .venv
+#
+# Full transitive pin snapshot: requirements.lock.txt
+# Deviations from the paper stack (CUDA 12.5 / torch 2.5.1) are deliberate:
+# Blackwell GPUs need cu128+ builds. pandas is pinned <3 because the upstream
+# code relies on pre-Copy-on-Write inplace semantics that pandas 3.x silently no-ops.
+
+timm==1.0.27
+pandas>=2.2,<3
+numpy==2.4.4
+scikit-learn==1.9.0
+matplotlib==3.11.0
+seaborn==0.13.2
+shap==0.51.0
+pybaseball==2.2.7
+tqdm==4.68.3
+imbalanced-learn==0.14.2
+gdown==6.1.0

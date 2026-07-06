@@ -1,0 +1,23 @@
+# environment
+.venv/
+
+# upstream reference clone (re-clone: git clone https://github.com/dxlabskku/TJS_Prediction.git)
+# also holds the authors' final_df.csv (136MB, shared privately - never commit)
+TJS_Prediction/
+
+# python artifacts
+__pycache__/
+*.pyc
+
+# large data / caches (statcast parquet, final_df, checkpoints, logs)
+data/
+.cache/
+*.pth
+*.pt
+*.parquet
+*.npz
+*.npy
+*.log
+
+# regeneratable prediction dumps (keep results/*.csv tracked)
+results/preds/
