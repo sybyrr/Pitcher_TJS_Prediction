@@ -1,6 +1,9 @@
 # environment
 .venv/
 
+# editor
+.vscode/
+
 # upstream reference clone (re-clone: git clone https://github.com/dxlabskku/TJS_Prediction.git)
 # also holds the authors' final_df.csv (136MB, shared privately - never commit)
 TJS_Prediction/
