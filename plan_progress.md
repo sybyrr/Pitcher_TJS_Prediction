@@ -1,37 +1,65 @@
 # 계획 및 진행상황
 
-목적: 승인된 실행 계획(Phase 0–3)의 canonical 정의와 세션별 진행 로그.
-계획 근거는 2026-07-06 논의에서 확정 (B안: 재현 + 진단 + KBO-지향 ablation).
-관련 문서: `kang_repo_audit.md`(코드 감사·환경), `reproduction_and_dataset.md`(데이터 정의), `KBO_applicability.md`(KBO 전략).
+목적: 승인된 실행 계획의 canonical 정의와 세션별 진행 로그.
+계획 v1은 2026-07-06 논의에서 확정 (B안: 재현 + 진단 + KBO-지향 ablation),
+**v2는 같은 날 Phase 1 종료 + ultracode 검증 결과를 반영해 개정** (개정 근거는
+진행 로그 마지막 항목). 관련 문서: `kang_repo_audit.md`(코드 감사·환경),
+`phase2_findings.md`(검증 36건 + 실행 설계), `reproduction_and_dataset.md`,
+`KBO_applicability.md`.
 
 ---
 
-## 계획
+## 최상위 목표 (모든 단계의 판정 기준)
 
-### Phase 0 — 데이터 기반 구축
-- Statcast 2016–2023 전체 다운로드 (`src/download_statcast.py`, 시즌별 parquet).
-- 추출 파이프라인 재작성 (`src/extract.py`): upstream `Pybaseball_extract.py`의 1:1 포팅
-  + 문서화된 편차([DEVIATION]/[GAP-FILL] 마커). 라벨은 v1에서 repo 스냅샷
-  `list of TJ.csv` 고정 (코호트 드리프트 방지).
-- 분류 전처리 포팅 (`src/prep_classification.py`).
-- **성공 기준: 코호트 620 (injured 101 / normal 519), diff feature 102, sequence 224.**
-  (모델 입력 feature는 new_before_tj_group 포함 103 — 코드 재구성 결과, 논문 표기는 102)
+- **G1 재현 보존**: 충실 재현 baseline은 동결. 모든 수정은 별도 변형으로
+  학습해 baseline과 대조한다.
+- **G2 정직한 평가**: 보고 수치는 배치 상황(새 투수, 미래 시즌)의 성능을
+  추정해야 한다. 누수·아티팩트·회고 정보는 제거하거나 기여도를 정량화한다.
+- **G3 KBO 이전 — 최종 산출물의 형태 확정 (2026-07-06)**: 목표는 "수술일
+  예측기"가 아니라 **현재까지의 데이터만으로 계산 가능한 전향적 부상 위험
+  지표**(위험도 순위 + 역학적 근거)다. Kang의 회고적 앵커 설계는 그대로
+  배치가 불가능하므로(사후 정보로 시간축 정렬), 전향적 재설계(Phase 2.5)가
+  KBO 적용의 전제 조건이다.
 
-### Phase 1 — 충실 재현 (버그 포함)
-- 발견된 upstream 버그(best-weights 미복원, ViT shuffle=False, 회귀 row-level split)를
-  그대로 둔 채 10 seed 학습. 학습 시작은 사용자 승인 후.
-- **성공 기준: ViT F1 0.73 / ROC-AUC 0.93, 회귀 R² 0.79 (허용 범위 사전 정의: F1 ±0.05).**
+## 계획 (v2)
 
-### Phase 2 — 진단·교정 재현
-- 버그 수정 영향 정량화 (deepcopy 복원, shuffle 수정).
-- 회귀 player-level split 교정 → R² 하락 폭 = 논문 수치의 낙관 편향 크기.
-- 시간적 외부검증 (2016–2021 학습 → 2022–2023 테스트).
+### Phase 0 — 데이터 기반 구축 [완료]
+- Statcast 2016–2023, 추출·전처리 포팅, 저자 final_df 확보·대조.
+- 성공 기준 충족: 코호트 620(101/519), diff 102, sequence 224, X=(620,224,103).
+
+### Phase 1 — 충실 재현 [완료]
+- 버그 보존 학습, 분류 5모델 + 회귀 + SHAP 전부 논문 수치 재현
+  (성공 기준 F1 ±0.05 충족; 상세는 진행 로그의 대조표).
+
+### Phase 2 — 진단·교정 (승인 대기, 미착수)
+ultracode 검증 36건(`phase2_findings.md`) 기반. G1 동결 + 변형별 대조,
+ViT+회귀 중심 측정 (변형당 GPU ~45분, 총 ~6시간):
+- P2-0 위생(변형별 결과 경로, seed 통일, 이중 소속 8명) →
+- P2-1 회귀 투수 단위 split(honest R²) → P2-2 버그 수정 변형(deepcopy,
+  ViT shuffle) → **P2-3 fill-artifact 기여도 측정**(상수 꼬리 마스킹 대조 —
+  F1 0.73 중 아티팩트 비중 정량화) → P2-4 전처리 변형(F=102, 진짜 선형보간,
+  train-only 통계) → P2-5 시간적 홀드아웃(≤2021 학습 / 2022–23 테스트) →
+- P2-6 지표·통계(PR-AUC 주지표, valid 기반 threshold, paired Wilcoxon,
+  분해능 명시) → P2-7 causal diff 재구축(expanding-window 기준선).
+- **성공 기준**: 각 교정의 성능 영향이 방향·크기와 함께 정량화되고, "정직한"
+  수치(투수 단위 + 시간 홀드아웃 + 아티팩트 제거)가 확정되는 것. 수치 하락은
+  실패가 아니라 산출물이다.
+
+### Phase 2.5 — 전향적 태스크 재정의 (신설, Phase 2 결과에 조건부)
+- rolling as-of-date: 시점 t까지의 trailing window만 입력, "t 이후 H일 내
+  TJS" 라벨(t 이후 수술 기록만 사용), causal 기준선(P2-7), 시간 순서 평가.
+- 산출물 형태: 이진 경보가 아닌 **위험도 순위/점수** (낮은 base rate 대응).
+- 진입 조건: Phase 2에서 아티팩트 제거 후에도 유의미한 신호가 남을 것.
+  남지 않는다면 그 결과 자체를 KBO 컨택 전 필수 정보로 문서화.
 
 ### Phase 3 — 확장 + KBO-지향 ablation
-- +2024 확장 (라벨은 Roegele 최신 시트로 갱신). 2025–2026 제외.
-- Feature-tier ablation: Tier1(KBO 공개: 구속·구종·회전수) / Tier2(+release pos,
-  extension, spin axis) / Tier3(full). Tier1→2 성능 점프 = 구단 설득 자료.
-- KBO 제안서 초안.
+- +2024 확장 (Roegele 최신 라벨, 재추출 파이프라인 사용). 2025–2026 제외.
+- Feature-tier ablation: Tier1(KBO 공개: 구속·구종·회전수) / Tier2(+release
+  pos, extension, spin axis) / Tier3(full). **Phase 2 교정된 파이프라인 위에서**
+  수행 (누수된 baseline 위의 격차는 무효) + Tier별 동등한 튜닝 예산.
+- 창 길이 등은 KBO 실현성 제약(3.3년 밀집 이력 불가) 하에 양 리그 동일 설계.
+- KBO 제안서: Phase 2.5 위험 지표 + ablation 격차 + SHAP 근거(상위 feature가
+  전부 Tier 2라는 Phase 1 결과)로 구성.
 
 ---
 
@@ -123,6 +151,69 @@
 - 산출물: `results/classification_results.csv`(50행),
   `results/regression_results.csv`(10행), seed별 예측 `results/preds/`(로컬),
   회귀 체크포인트 `data/checkpoints/`(SHAP 재사용).
-- **잔여**: 회귀 SHAP (Table 10 재현) — 저장된 체크포인트로 재학습 없이
-  실행 가능(`train_regression.py`에서 --no-shap 없이, 예상 1~2.5시간).
-- 다음: SHAP 실행 → Phase 2 (버그 교정 + player-level split + 시간 검증).
+- **SHAP 재현 (--shap-only, 체크포인트 재사용, ~50분) — Table 10 대조:**
+  - top-10 등장 distinct feature 수 **20개 — 논문과 동일**.
+  - 평균 |SHAP| 상위 3개가 논문과 **동일 집합**: release_speed_FF(우리 16.5 /
+    논문 17.1), spin_axis_FF(15.1 / 14.5), release_extension_SL(13.5 / 13.4).
+  - 상위 6개 중 5개가 논문 상위 6개와 일치. 결과:
+    `results/regression_top10_features.csv`.
+  - KBO 함의 재확인: 상위 feature가 전부 Tier 2(spin_axis, extension,
+    release_pos) + 구속 — "중요한 신호가 KBO 비공개 계층에 있다"는 Phase 3
+    ablation 가설과 정합.
+- **Phase 1 종료.** 분류·회귀·XAI 전부 논문 수치 재현.
+
+### 2026-07-06 (세션 1, 계속) — Phase 2 사전 검증 (ultracode)
+- 6차원 코드 감사 + 적대적 검증(에이전트 82개): **36건 생존, 2건 기각**.
+  전체 목록·실행 설계: `phase2_findings.md`.
+- 핵심: 회귀 split에서 novel test 투수 0명(실측 재현됨), best-weights 참조
+  버그, **fill-artifact 지름길**(상수 꼬리 길이가 클래스와 상관 — 신규 발견),
+  diff feature의 미래 정보 사용, 회고적 앵커(전향 예측 아님), threshold
+  미보정, 코호트 era/내구성 교란.
+- Phase 2 실행 설계: G1 동결 + 변형별 대조(ViT+회귀 중심, 변형당 GPU ~45분,
+  총 ~6시간). **사용자 승인 대기** — 스코프(P2-0~7)와 전향적 재정의(A5)
+  분리 여부 결정 필요.
+
+### 2026-07-06 (세션 1, 마감) — 목표 개정 (계획 v1 → v2)
+- 사용자와의 논의로 확정된 사항:
+  1. **최종 산출물의 형태**: KBO에 적용 가능한 "부상 지표"란 **현재까지의
+     데이터만으로 미래를 예측하는 전향적 위험 점수**여야 함. Kang 설계는
+     day 0 = 마지막 경기(사후 정보) 앵커라 그대로는 배치 불가 — 검증 발견
+     A5(회고적 앵커)가 한계가 아니라 **재설계 대상**으로 승격됨.
+  2. 이에 따라 **Phase 2.5(전향적 태스크 재정의) 신설**. 진입 조건은
+     Phase 2의 fill-artifact 기여도 측정(P2-3)과 시간 홀드아웃(P2-5)에서
+     아티팩트 제거 후에도 신호가 남는 것. 전향 전환 시 성능은 회고
+     수치(F1 0.71)보다 낮아질 것으로 예상하며, 그 정직한 수치가 KBO 컨택의
+     근거가 됨.
+  3. 전향 가능성의 근거: SHAP 상위 feature(구속 하락, spin axis 수평화,
+     release extension 변화)가 수술 전 점진 진행하는 선행 지표 성격
+     (논문 추세 r 값들로 지지) — 원리상 가능, 크기는 측정 대상.
+  4. 튜닝보다 검증 교정 우선 원칙 재확인 (620 표본·test 부상 20명 환경에서
+     튜닝 이득은 노이즈와 구분 불가; ablation 시에만 Tier별 동등 튜닝).
+- 운영 방침 확정: git 작업(commit/push/pull)은 사용자 직접. 단계 착수는
+  명시적 지시 후 (방법 설명 ≠ 착수 명령). GPU 신규 작업은 승인 전 금지.
+
+### 2026-07-07 (세션 1, 야간 자율 실행) — Phase 2 + 2.5 완료
+- 사용자 승인(B안 전체 스코프)으로 P2-0~7 + Phase 2.5 실행. 실행 ~7시간
+  (분류 변형 10종 + 회귀 변형 4종 + 전향 학습). **모든 수치·해석의
+  canonical 소스: `phase2_results.md`.** 실행 과정: `phase2_worklog.md`.
+- 3줄 요약: ① 회귀 신투수 R² = 음수 (논문 0.79는 전부 within-pitcher 보간)
+  ② 분류 AUC 0.93 중 ~0.11은 이력길이 아티팩트, **정직한 회고 수치 =
+  AUC 0.816** (지름길 제거 × 미래 시즌, v9) ③ 전향(rolling) 예측은 현
+  설계에서 무작위 수준 — G3 "부상 지표"의 전제 미충족.
+- **Phase 2 성공 기준 충족** (각 교정의 영향이 방향·크기·p값과 함께 정량화,
+  수치 하락 자체가 산출물). Phase 2.5는 실행 완료, 진입 조건이었던 "전향
+  신호 잔존"은 **불충족** — 계획 v2가 예정한 대로 이 결과 자체를 KBO 컨택
+  전 필수 정보로 문서화함.
+- **다음: Phase 3 진입 전 사용자 결정 필요** — (i) 전향 설계 반복(IL 라벨
+  확장, horizon/창 탐색, 생존분석) vs (ii) 회고 프레이밍(AUC 0.82 위험
+  프로파일링)으로 전환. feature-tier ablation은 어느 쪽이든 v9 프로토콜
+  위에서 수행.
+
+### 2026-07-07 (세션 1, 계속) — 회귀 split 공정성 논의, compact 대비 정리
+- 사용자 질문("회귀는 부상 확정 투수 한정 태스크인데 그래도 투수별 split이
+  공정한가")의 논거를 확정, `phase2_results.md` 회귀 절에 기록. 요지: 라벨이
+  수술일 역산이므로 배치 대상은 정의상 전원 label-novel → grouped split이
+  유일한 배치 정합 평가. 추세 기반 설계는 Phase 3 A안 후보로 명시.
+- 상태: GPU 유휴, 실행 중 프로세스·예약 작업 없음. 문서·메모리 compact 대비
+  정리 완료. **Phase 3 방향 결정 대기** (A 전향 반복 / B 회고 프레이밍 —
+  `phase2_results.md` 마지막 절).

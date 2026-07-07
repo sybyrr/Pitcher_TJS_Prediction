@@ -6,28 +6,35 @@ KBO 구단에 트래킹 데이터 접근을 요청하는 것이 최종 목표인
 
 Read in this order on session start for fast context:
 1. This file — current status at a glance
-2. `plan_progress.md` — 승인된 Phase 0–3 계획 + 세션별 진행 로그
-3. `Kang_2025_TJS_Prediction.md` — 원 논문 전사본 (문제 정의 + 수치 기준)
-4. `kang_repo_audit.md` — 클론 코드 감사 + 확정 환경 기록
-5. `reproduction_and_dataset.md`, `KBO_applicability.md` — 데이터 정의, KBO 전략
+2. `plan_progress.md` — 계획(v2, G1–G3) + 세션별 진행 로그
+3. `phase2_results.md` — Phase 2/2.5 결과 canonical (변형표, 전향 결과)
+4. `phase2_findings.md` — 검증 발견 36건 / `phase2_worklog.md` — 실행 아카이브
+5. `Kang_2025_TJS_Prediction.md`(논문), `kang_repo_audit.md`(코드 감사·환경),
+   `reproduction_and_dataset.md`, `KBO_applicability.md`
 
-## Goal
+## Goal (v2, 2026-07-06 개정 — canonical은 plan_progress.md의 G1–G3)
 
-1. **재현**: Kang과 동일 정의(2016–2023)로 분류 F1 ~0.73 / ROC-AUC ~0.93,
-   회귀 R² ~0.79 수준 재현. 이것이 baseline 신뢰의 성공 기준.
-2. **확장**: +2024 데이터 검증, 교정 재현(발견된 버그 수정판)과의 비교.
-3. **KBO 제안**: feature ablation으로 "KBO 비공개 feature의 기여도"를 정량화한
-   구단 설득 자료. 2025–2026 데이터는 v1 제외 (plate_x/z 정의 변경 + 라벨 미성숙).
+1. **G1 재현** [달성]: Kang 동일 정의로 분류 F1 0.71/AUC 0.92, 회귀 R² 0.783
+   재현 완료. 이 baseline은 동결, 모든 수정은 변형으로 대조.
+2. **G2 정직한 평가**: 누수·아티팩트 교정 후 배치 상황(새 투수·미래 시즌)의
+   성능 확정. 수치 하락은 실패가 아니라 산출물.
+3. **G3 KBO 이전**: 최종 산출물은 **현재까지의 데이터만으로 계산 가능한
+   전향적 부상 위험 지표**(위험도 순위 + 역학 근거). 전향적 재설계(Phase 2.5)가
+   전제 조건이며, feature-tier ablation은 교정된 파이프라인 위에서 수행.
+   2025–2026 데이터는 제외 (plate_x/z 정의 변경 + 라벨 미성숙).
 
-## Current status (2026-07-06)
+## Current status (2026-07-07)
 
-**Phase 1 충실 재현 완료 (SHAP만 잔여).** 분류 5모델×10 seeds: ViT 0.71/0.92
-(논문 0.73/0.93), ResNet·Transformer·CNN+LSTM은 논문과 일치, 순위 동일.
-회귀 R² 0.783±0.019 (논문 0.79), 100-Day RMSE 94.6 (논문 95.7). 성공 기준
-(F1 ±0.05) 충족. 결과: `results/*.csv`. 잔여: 회귀 SHAP (체크포인트
-`data/checkpoints/`에서 재학습 없이 실행, `src/train_regression.py` SHAP 플래그).
-다음: SHAP → Phase 2 (버그 교정, player-level split, 시간적 외부검증).
-Phase 0 상세(재추출본 검증 r=0.978 등)는 `plan_progress.md`.
+**Phase 1 완전 종료 — 분류·회귀·SHAP 전부 재현.** 분류: ViT 0.71/0.92(논문
+0.73/0.93), 나머지 4모델 논문과 일치, 순위 동일. 회귀: R² 0.783±0.019(논문
+0.79), RMSE 94.6(논문 95.7). SHAP: distinct 20개 동일, 평균 |SHAP| top-3 동일
+집합(release_speed_FF·spin_axis_FF·release_extension_SL). 결과: `results/`.
+**Phase 2 + 2.5 완료 (2026-07-07 야간 자율 실행).** 결과 canonical:
+`phase2_results.md`. 3줄: ① 회귀 신투수 R² 음수(논문 0.79는 within-pitcher
+보간) ② 정직한 회고 분류 수치 = **AUC 0.816** (fill-artifact 제거 × 미래
+시즌; 논문 0.93 중 ~0.11은 이력길이 아티팩트) ③ 전향(rolling) 예측은 현
+설계에서 무작위 수준. **Phase 3 진입 전 사용자 결정 대기**: 전향 설계 반복
+vs 회고 프레이밍 전환 (`phase2_results.md` 마지막 절). 상세: `plan_progress.md`.
 
 ## Key files
 
@@ -41,6 +48,9 @@ src/download_statcast.py      # Statcast 시즌별 다운로드 → data/raw/*.p
 src/extract.py                # final_df 재구축 (upstream 1:1 + [GAP-FILL]/[DEVIATION] 마커)
 src/prep_classification.py    # final_df → X(N,224,103)/y 텐서 (Prepfortrain 포트)
 src/compare_final_df.py       # 재추출본 vs 저자본 정량 비교
+src/run_phase2.py             # Phase 2 분류 변형 러너 (VARIANTS 레지스트리 canonical;
+                              #   전체 Phase 2/2.5 코드 목록은 phase2_results.md 산출물 인덱스)
+results/                      # Phase 1 재현 + phase2/ 변형 결과 CSV
 scripts/verify_env.py         # 환경 검증 (모델 forward + statcast fetch, 학습 X)
 TJS_Prediction/               # upstream 클론 (수정 금지, gitignore) + Raw_data/final_df.csv(저자본)
 data/                         # raw parquet, 재추출 final_df (gitignore됨)
@@ -94,8 +104,10 @@ env: `.venv/` (uv 기반, Python 3.11.11). torch는 반드시 cu128 인덱스에
 
 ## Git
 
+- The user runs commit/push/pull themselves. Claude touches git state only on
+  an explicit per-instance request (keeping .gitignore safe stays Claude's job).
 - Do NOT add a `Co-Authored-By: Claude ...` line to commit messages.
-- Commit or push only when asked. If on the default branch, branch first.
+- If asked to commit on the default branch, branch first.
 - Before any risky git operation (merge, rebase, pull, reset):
   1. Commit current work first as a rollback checkpoint.
   2. Name the specific files that will conflict.

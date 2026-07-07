@@ -41,7 +41,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 SEEDS = range(102, 1003, 100)
 # --no-shap: train/evaluate only. SHAP can run later from the saved per-seed
 # checkpoints (data/checkpoints/) without retraining.
+# --shap-only: skip training, load the saved checkpoints, run SHAP only
+# (results CSV is not re-appended; data_split(seed) reproduces the same splits).
 RUN_SHAP = '--no-shap' not in sys.argv
+SHAP_ONLY = '--shap-only' in sys.argv
 
 
 def set_seed(seed: int) -> None:
@@ -137,11 +140,13 @@ def main() -> None:
             loaders[name] = DataLoader(ds, batch_size=batch_size, shuffle=sh)
 
         input_dim = X_train.shape[2]
-        model = CNN(dropout, device, input_dim).to(device)
         start = time.time()
-        loss_log, valid_log = model.train_model(
-            loaders['train'], loaders['valid'], num_epochs, learning_rate,
-            patience, l2_reg, l1_reg, seed)
+        loss_log = []
+        if not SHAP_ONLY:
+            model = CNN(dropout, device, input_dim).to(device)
+            loss_log, valid_log = model.train_model(
+                loaders['train'], loaders['valid'], num_epochs, learning_rate,
+                patience, l2_reg, l1_reg, seed)
         train_time = time.time() - start
 
         best_model = CNN(dropout, device, input_dim).to(device)
@@ -170,12 +175,13 @@ def main() -> None:
                 'Importance': importances[top10_idx], 'Iteration': seed})], ignore_index=True)
             all_top10.to_csv(TOP10_CSV, index=False)  # save incrementally
 
-        row = {'seed': seed, 'r2': r2, 'rmse_0_100': rmses[0],
-               **{f'rmse_{b}_{b+100}': v for b, v in zip(range(0, 500, 100), rmses)},
-               **{f'n_{b}_{b+100}': c for b, c in zip(range(0, 500, 100), counts)},
-               'epochs': len(loss_log), 'train_time_s': round(train_time, 1)}
-        pd.DataFrame([row]).to_csv(RESULTS_CSV, mode='a',
-                                   header=not RESULTS_CSV.exists(), index=False)
+        if not SHAP_ONLY:
+            row = {'seed': seed, 'r2': r2, 'rmse_0_100': rmses[0],
+                   **{f'rmse_{b}_{b+100}': v for b, v in zip(range(0, 500, 100), rmses)},
+                   **{f'n_{b}_{b+100}': c for b, c in zip(range(0, 500, 100), counts)},
+                   'epochs': len(loss_log), 'train_time_s': round(train_time, 1)}
+            pd.DataFrame([row]).to_csv(RESULTS_CSV, mode='a',
+                                       header=not RESULTS_CSV.exists(), index=False)
 
     df = pd.read_csv(RESULTS_CSV)
     print("\n=== summary (mean over seeds) ===", flush=True)

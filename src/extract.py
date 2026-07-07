@@ -8,13 +8,15 @@ except where marked:
   [DEVIATION] same math, different (non-deprecated / vectorized) pandas idiom
   [GAP-FILL]  logic the public script lost but the paper/design requires
 
-Run: .venv\\Scripts\\python.exe src\\extract.py
+Run: .venv\\Scripts\\python.exe src\\extract.py [--causal]
 Input : data/raw/statcast_{2016..2023}.parquet (src/download_statcast.py)
         TJS_Prediction/Raw_data/list of TJ.csv, pitcher_hand.csv (repo snapshot)
-Output: data/final_df.csv
+Output: data/final_df.csv (--causal: data/final_df_causal.csv, expanding-mean
+        diff baseline) + data/cohort_meta.csv (per-sample anchor dates)
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -24,7 +26,6 @@ from tqdm import tqdm
 ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT / "data" / "raw"
 UPSTREAM_DATA = ROOT / "TJS_Prediction" / "Raw_data"
-OUT_CSV = ROOT / "data" / "final_df.csv"
 
 SEASONS = range(2016, 2024)  # upstream L28-37 (comma bug fixed: 2021 included)
 
@@ -258,11 +259,23 @@ def combine_groups(df: pd.DataFrame) -> pd.DataFrame:
     merged = merged[~merged['player_name'].isin(
         ['Rogers, Tyler', 'Hudson, Dakota', 'Clase, Emmanuel'])]
     merged = merged[~merged['pitcher'].isin([458584])]
-    return merged
+
+    # cohort metadata (game_date is dropped in finalize; capture anchors here)
+    tgt = np.where(merged['TJ Surgery Year'].notnull(), 1, 0)
+    meta = (merged.assign(_t=tgt)
+            .groupby(['pitcher', '_t'])['game_date']
+            .agg(anchor_date='max', first_date='min', n_rows='count')
+            .reset_index().rename(columns={'_t': 'target'}))
+    return merged, meta
 
 
-def finalize(df: pd.DataFrame) -> pd.DataFrame:
-    """Stages 11-13 (upstream L439-526): drop bookkeeping, target, diff features."""
+def finalize(df: pd.DataFrame, causal: bool = False) -> pd.DataFrame:
+    """Stages 11-13 (upstream L439-526): drop bookkeeping, target, diff features.
+
+    causal=True replaces the per-(pitcher,target) full-window mean baseline
+    with an expanding mean over games in chronological order (new_before_tj
+    descending), so every diff uses only information available at that game
+    (Phase 2 finding feature-leakage-lookahead)."""
     columns_to_drop = [
         'last_game_date', 'TJ Surgery Date_1', 'TJ Surgery Date_2', 'TJ Surgery Date_3',
         'Year of TJ_1', 'Year of TJ_2', 'Year of TJ_3',
@@ -278,11 +291,20 @@ def finalize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.sort_values(by=['player_name', 'target', 'new_before_tj'])
 
     cols_for_diff = [c for c in COLUMNS_102 if c in df.columns]
-    mean_df = df.groupby(['pitcher', 'target'])[cols_for_diff].mean().reset_index()
-    mean_df = mean_df.rename(columns={c: f'mean_{c}' for c in cols_for_diff})
-    df = pd.merge(df, mean_df, on=['pitcher', 'target'], how='left')
-    for c in cols_for_diff:
-        df[f'diff_{c}'] = df[c] - df[f'mean_{c}']
+    if causal:
+        # chronological order within a sample = new_before_tj descending
+        df = df.sort_values(by=['pitcher', 'target', 'new_before_tj'],
+                            ascending=[True, True, False])
+        exp = (df.groupby(['pitcher', 'target'])[cols_for_diff]
+               .expanding().mean().reset_index(level=[0, 1], drop=True))
+        for c in cols_for_diff:
+            df[f'diff_{c}'] = df[c] - exp[c]
+    else:
+        mean_df = df.groupby(['pitcher', 'target'])[cols_for_diff].mean().reset_index()
+        mean_df = mean_df.rename(columns={c: f'mean_{c}' for c in cols_for_diff})
+        df = pd.merge(df, mean_df, on=['pitcher', 'target'], how='left')
+        for c in cols_for_diff:
+            df[f'diff_{c}'] = df[c] - df[f'mean_{c}']
 
     df = df[~df['player_name'].isin(['Sobotka, Chad', 'Williams, Trevor'])]
 
@@ -292,6 +314,8 @@ def finalize(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
+    causal = '--causal' in sys.argv
+    out_csv = ROOT / "data" / ("final_df_causal.csv" if causal else "final_df.csv")
     data = load_raw()
     print(f"raw regular-season pitches: {len(data):,}")
 
@@ -309,8 +333,11 @@ def main() -> None:
     result = add_days_before_tj(result)
     result = interpolate_missing(result)
 
-    merged = combine_groups(result)
-    final_df = finalize(merged)
+    merged, meta = combine_groups(result)
+    meta_csv = ROOT / "data" / "cohort_meta.csv"
+    meta.to_csv(meta_csv, index=False)
+    print(f"cohort meta: {len(meta)} samples -> {meta_csv}")
+    final_df = finalize(merged, causal=causal)
 
     n_pitchers = final_df.groupby(['pitcher', 'target']).ngroups
     n_injured = final_df[final_df['target'] == 1].groupby('pitcher').ngroups
@@ -319,9 +346,9 @@ def main() -> None:
           f"(injured={n_injured}, normal={n_pitchers - n_injured}), diff features={n_diff}")
     print("Kang reference: samples=620 (injured=101, normal=519), diff features=102")
 
-    OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
-    final_df.to_csv(OUT_CSV, index=False)
-    print(f"saved -> {OUT_CSV}")
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    final_df.to_csv(out_csv, index=False)
+    print(f"saved -> {out_csv}")
 
 
 if __name__ == "__main__":
