@@ -40,7 +40,9 @@ recall@50 29%** (blackout 생존 = 순환 셧다운 아님, 라벨은 라이브 
 검출 한계 이하 (E3 추세·변동성 additive 널, 독립 검증 통과) ③ 생존 신호는
 전부 KBO 공개 계층 feature → 데이터 개방 논거는 "Tier-2 증분 검정"으로
 전환. canonical: `phase2_results.md` Phase 2.6절. 산출물: `results/phase26/`,
-`data/prospective/cohort_v2.parquet` 등. **Phase 3 스코프 결정 대기.**
+`data/prospective/cohort_v2.parquet` 등. **Phase 3: 계획 v3 제안됨
+(R 강건성 블록 → A 제안서 → B tier ablation; plan_progress.md의 "계획 v3"
+절이 canonical, 실행 가드레일 포함) — 사용자 승인 대기.**
 
 ## Key files
 
