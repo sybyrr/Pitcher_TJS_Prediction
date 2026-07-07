@@ -7,7 +7,7 @@ KBO 구단에 트래킹 데이터 접근을 요청하는 것이 최종 목표인
 Read in this order on session start for fast context:
 1. This file — current status at a glance
 2. `plan_progress.md` — 계획(v2, G1–G3) + 세션별 진행 로그
-3. `phase2_results.md` — Phase 2/2.5 결과 canonical (변형표, 전향 결과)
+3. `phase2_results.md` — Phase 2/2.5/2.6 결과 canonical (변형표, 전향 재설계)
 4. `phase2_findings.md` — 검증 발견 36건 / `phase2_worklog.md` — 실행 아카이브
 5. `Kang_2025_TJS_Prediction.md`(논문), `kang_repo_audit.md`(코드 감사·환경),
    `reproduction_and_dataset.md`, `KBO_applicability.md`
@@ -33,8 +33,14 @@ Read in this order on session start for fast context:
 `phase2_results.md`. 3줄: ① 회귀 신투수 R² 음수(논문 0.79는 within-pitcher
 보간) ② 정직한 회고 분류 수치 = **AUC 0.816** (fill-artifact 제거 × 미래
 시즌; 논문 0.93 중 ~0.11은 이력길이 아티팩트) ③ 전향(rolling) 예측은 현
-설계에서 무작위 수준. **Phase 3 진입 전 사용자 결정 대기**: 전향 설계 반복
-vs 회고 프레이밍 전환 (`phase2_results.md` 마지막 절). 상세: `plan_progress.md`.
+설계에서 무작위 수준. **Phase 2.6(전향 재설계) 실행 완료 (2026-07-07).**
+3줄: ① 정직 전향 수치 = workload LR **ROC 0.64 / PR lift 1.6× / event
+recall@50 29%** (blackout 생존 = 순환 셧다운 아님, 라벨은 라이브 시트로
+교정 — 스냅샷에 2022-23 수술 71건 누락이었음) ② 급성 조기경보 성분은
+검출 한계 이하 (E3 추세·변동성 additive 널, 독립 검증 통과) ③ 생존 신호는
+전부 KBO 공개 계층 feature → 데이터 개방 논거는 "Tier-2 증분 검정"으로
+전환. canonical: `phase2_results.md` Phase 2.6절. 산출물: `results/phase26/`,
+`data/prospective/cohort_v2.parquet` 등. **Phase 3 스코프 결정 대기.**
 
 ## Key files
 

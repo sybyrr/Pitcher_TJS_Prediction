@@ -31,7 +31,7 @@
 - 버그 보존 학습, 분류 5모델 + 회귀 + SHAP 전부 논문 수치 재현
   (성공 기준 F1 ±0.05 충족; 상세는 진행 로그의 대조표).
 
-### Phase 2 — 진단·교정 (승인 대기, 미착수)
+### Phase 2 — 진단·교정 [완료 2026-07-07 — 결과: phase2_results.md]
 ultracode 검증 36건(`phase2_findings.md`) 기반. G1 동결 + 변형별 대조,
 ViT+회귀 중심 측정 (변형당 GPU ~45분, 총 ~6시간):
 - P2-0 위생(변형별 결과 경로, seed 통일, 이중 소속 8명) →
@@ -45,12 +45,20 @@ ViT+회귀 중심 측정 (변형당 GPU ~45분, 총 ~6시간):
   수치(투수 단위 + 시간 홀드아웃 + 아티팩트 제거)가 확정되는 것. 수치 하락은
   실패가 아니라 산출물이다.
 
-### Phase 2.5 — 전향적 태스크 재정의 (신설, Phase 2 결과에 조건부)
+### Phase 2.5 — 전향적 태스크 재정의 [완료 2026-07-07 — 전향 신호 미검출, 이 널 결과가 2.6 재설계의 입력]
 - rolling as-of-date: 시점 t까지의 trailing window만 입력, "t 이후 H일 내
   TJS" 라벨(t 이후 수술 기록만 사용), causal 기준선(P2-7), 시간 순서 평가.
 - 산출물 형태: 이진 경보가 아닌 **위험도 순위/점수** (낮은 base rate 대응).
 - 진입 조건: Phase 2에서 아티팩트 제거 후에도 유의미한 신호가 남을 것.
   남지 않는다면 그 결과 자체를 KBO 컨택 전 필수 정보로 문서화.
+
+### Phase 2.6 — 전향 재설계 (신설·완료 2026-07-07)
+- Phase 2.5 널 결과의 원인 분해(informative censoring·라벨 부족·문헌 천장)
+  후 재설계 실행: 라이브 라벨(스냅샷의 71건 누락 교정), F=365 위험집합,
+  H=90 primary, blackout 민감도, E4 지표(사건 단위 recall·클러스터 CI).
+- 결과: workload LR ROC 0.64 / lift 1.6× / event recall@50 29%, blackout
+  생존(전향성 확증), 급성 성분(추세·변동성) additive 널 — 독립 검증 통과.
+  전체 수치·해석: `phase2_results.md` Phase 2.6절 (canonical).
 
 ### Phase 3 — 확장 + KBO-지향 ablation
 - +2024 확장 (Roegele 최신 라벨, 재추출 파이프라인 사용). 2025–2026 제외.
@@ -60,6 +68,12 @@ ViT+회귀 중심 측정 (변형당 GPU ~45분, 총 ~6시간):
 - 창 길이 등은 KBO 실현성 제약(3.3년 밀집 이력 불가) 하에 양 리그 동일 설계.
 - KBO 제안서: Phase 2.5 위험 지표 + ablation 격차 + SHAP 근거(상위 feature가
   전부 Tier 2라는 Phase 1 결과)로 구성.
+- **[2026-07-07 개정] tier ablation의 새 프레임**: Phase 2.6에서 생존한
+  전향 신호의 feature가 전부 공개 계층(투구수·등판일·구속)이므로, ablation은
+  "공개 baseline(M0) + Tier-2 증분 검정"으로 재정의 — KBO 요청 논거가
+  "핵심 신호가 비공개 계층에 있다"에서 "공개 baseline을 Tier-2가 넘는지
+  실측하자"로 이동. 스코프(A 제안서 / B tier ablation / C 추가 실험)는
+  사용자 결정 대기.
 
 ---
 
@@ -217,3 +231,37 @@ ViT+회귀 중심 측정 (변형당 GPU ~45분, 총 ~6시간):
 - 상태: GPU 유휴, 실행 중 프로세스·예약 작업 없음. 문서·메모리 compact 대비
   정리 완료. **Phase 3 방향 결정 대기** (A 전향 반복 / B 회고 프레이밍 —
   `phase2_results.md` 마지막 절).
+
+### 2026-07-07 (세션 1, 계속) — Phase 2.6 전향 재설계 확정 (착수는 신호 대기)
+- 사용자 방향 확정: **전향 프레임 유지 + 라벨 TJS 고정** (팀원 distance-based
+  단기 TJS 트랙과 충돌 방지 — IL/부상 전반으로 라벨 확장 금지).
+- ultracode 조사 (에이전트 12: 조사 5각도 + 레퍼런스 검증 5 + CPU 진단 실험 2)
+  → 무신호 원인 분해: informative censoring(수술 65%가 prev-30d 규칙에서
+  부적격) + 라벨 부족(train 양성 102) + 문헌 천장(진짜 전향 AUC 0.61-0.67).
+- fable 재검토 구멍 4개(H×B 커플링, TJ 리스트 2024 경계 절단, fold간 embargo
+  부재, 용량 초과→ViT 강등) + codex 교차 검토 6건 수용. 사용자 결정 3건
+  (E0 최소판 먼저 / horizon은 supply 표 보고 **최단 우선** / ViT 강등 동의).
+  상세·실험맵(E0~E4)·인용 검증 상태: `phase2_results.md` Phase 2.6절.
+- **다음 작업 (사용자 "시작" 신호 후, CPU 위주)**: E0a/E0b 라벨·위험집합
+  감사 + (H,B) supply 표 → E1+E2 코호트 재구축(windows v2) → 정규화 LR
+  baseline → E3 additive ablation(workload→trend→variability) → E4 지표 병행.
+
+### 2026-07-07 (세션 1, 계속) — Phase 2.6 실행 완료 (블록 1–3, 전부 CPU)
+- 사용자 "시작" 신호로 착수, 워크플로우 3개(wf_76a925e9 / wf_649b3c96 /
+  wf_554f0cb2, 에이전트 8)로 E0~E4 전체 완료. **모든 수치·해석 canonical:
+  `phase2_results.md` Phase 2.6절** (블록 1: E0 감사+공급 표 → H=90 primary/
+  F=365/라이브 라벨 확정, 스냅샷의 2022-23 수술 71건 누락 발견; 블록 2:
+  cohort_v2 + workload baseline ROC 0.640, blackout으로 순환 셧다운 반증;
+  블록 3: E3 추세·변동성 additive 널, 독립 검증 통과).
+- 3줄 결론: ① 정직 전향 수치 = workload LR ROC 0.64 / PR lift 1.6× /
+  event recall@50 29% (blackout 생존 = 진짜 전향 신호) ② 급성 조기경보
+  성분은 검출 한계 이하 (회귀 붕괴·blackout 평탄·E3 널 3중 정합) ③ 생존
+  신호는 전부 KBO 공개 계층 feature → v1 프로파일러는 트래킹 데이터 불필요,
+  데이터 개방 논거는 "Tier-2 증분 검정"으로 전환.
+- 데이터 산출물: `data/prospective/cohort_v2.parquet`,
+  `game_features_v2.parquet`; 라이브 TJ 라벨 `tj_live_clean.csv`(scratchpad,
+  **영속화 필요 시 data/로 복사**). 실험 스크립트·결과는 scratchpad
+  (`b1_baseline_v2.py`, `e3_ablation.py`, `E3_RESULTS.md` 등).
+- **다음 결정 포인트**: Phase 3 스코프 — (i) KBO 제안서/문서화 정리
+  (ii) tier ablation 새 프레임(공개 baseline + Tier-2 증분) (iii) 추가
+  실험(H=365 탐색, within-pitcher 고정효과). 사용자 결정 대기.
