@@ -280,6 +280,11 @@ ViT+회귀 중심 측정 (변형당 GPU ~45분, 총 ~6시간):
   + 나이. 목적: "만성 사용량 낮음=고위험"이 불펜/연령 프록시인지 분해 +
   성능 개선 가능성. paired delta 보고. pc_chronic 계수가 role 추가로 크게
   죽으면 해석문을 "역할 포함 프로파일"로 수정.
+  **[2026-07-08 role 부분 완료]**: start_share additive가 dPR CI 0 상방
+  배제(양 H) → **M-role(M0''+start_share) 잠정 canonical** (R1 재확정
+  조건). Simpson 확증: 역할 간 prevalence(선발 2배) vs 역할 내 사용량
+  감소 위험 — pc_chronic 계수 −0.185→−0.38. 상호작용·역할 내 표준화
+  불필요. **R2 잔여 = 나이만.** 상세: phase2_results.md 블록 5.
 - **R3 회고 v9 라이브 라벨 재실행**: v9 코호트는 구 스냅샷 라벨 기반 —
   누락 71건 일부가 정상군 오염 가능(0.816은 과소측정 추정). extract를
   라이브 리스트로 재실행 → v9 재측정, 제안서 대표 수치 확정.
@@ -325,6 +330,49 @@ H=365 탐색, within-pitcher 고정효과, Dillon식 최종 등판 이상탐지.
 - 신규 실험은 `results/phase26/scripts/` 프로토콜 재사용 + **M0 재현 체크
   선행** + paired delta 보고 형식 유지.
 - 스토리(해석) 수정이 필요해지면 근거를 문서에 기록하고 사용자 승인 후 진행.
+
+### 2026-07-08 — 계획 v3 승인, R 블록 완료 (R3 GPU 재실행 진행 중)
+- **R1 rolling-origin: 기준 (a)(b) 모두 PASS.** 전 12 cell(모델×연도×H)
+  ROC>0.55(최저 0.572), M-role의 dPR·dROC 점추정 6/6 fold 양(+). 2023
+  (피치클록)에서 workload 모델이 가장 약하고 M-role 이득이 가장 큼 =
+  아티팩트의 반대 방향. **M-role(M0''+start_share) canonical 확정.**
+  단서: fold당 이벤트 17-29건이라 단일 fold 유의성은 없음 — 방향 일관성
+  기준의 통과이며, 이는 사전 명시된 기준임.
+- **R2 age: 미채택.** 짝지은 CI 모두 0 포함 + 점추정 부호가 H 간 반전.
+  단 ① 단변량 나이 기울기는 실재(젊을수록 발생률 3-4×, 생존자 효과 해석)
+  ② age가 pc_chronic 계수를 안 움직임 → "만성 사용량=나이 프록시" 가설
+  기각. 필요 시 해석용 공변량으로만.
+- **R3 prep 완료 + GPU 재실행 착수**: extract.py --tj-csv/--out 플래그
+  (기본 동작 불변, upstream 무수정), 라이브 재추출 652 샘플(부상 111→124).
+  **핵심 발견: v9 코호트 영향은 "71건 누락"이 아니라 2024 수술 라벨
+  성숙** — 신규 부상 13명 중 11명이 2024 수술자(스냅샷엔 미래라 없었음),
+  71건 중 Kang 코호트 진입은 2명뿐(나머지는 마이너). v9 temporal test
+  부상 48→61(+27%, 전부 2023 anchor). **GPU 재실행 완료 (meta 복구 검증됨)**:
+  seed-paired ROC v9o_snap 0.675 → v9o_live **0.601** (p=0.002, 10 seed
+  전부 하락). 저자 v9=0.816. **회고 대표 수치 하향 정정: 정직 회고
+  ROC ~0.60** (교정이 수치를 낮춤 — 신규 양성이 2024 수술자로 더 어려움).
+  회고(~0.60)·전향(~0.64) 대역 수렴 → "붕괴" 서사 폐기. 상세:
+  phase2_results.md 블록 6.
+- **R4: partial_news_based.** 공개 KBO TJS 시트 부재 확증(위키·스탯티즈·
+  MyKBO 전무), 뉴스 재구성은 1군 유명 투수 편향(연 5-15건 추정, 수술일
+  정밀도 혼재). **제안서 핵심 카드: KBO 부상자명단 제도(2020~)가 이미
+  '부상 일자·부위·진단서'를 구단→KBO 경로로 수집·보유(비공개) → 요청은
+  "새 데이터 수집"이 아니라 "이미 존재하는 내부 라벨에의 통제된 접근".**
+  공개 라벨은 하한 검증 세트로만.
+- 다음: v9o 완료 → R3 수치 확정(회고 대표 수치) → A 제안서 + B/B'.
+- **R 블록 종료 상태 (2026-07-08)**: 산출물 `results/phase3/`
+  (R1_ROLLING/R2_AGE/R3_PREP/R4_KBO_LABELS.md + csv + scripts). 코드 변경
+  잔존: `src/extract.py`(--tj-csv/--out 플래그, 기본 동작 불변),
+  `src/run_phase2.py`(LIVE_CSV + v9o_snap/v9o_live 변형). 데이터:
+  `data/final_df_live.csv`, `data/tj_live_for_extract.csv`,
+  `data/cohort_meta_{snapshot,live}.csv`(cohort_meta.csv는 스냅샷으로 복구됨).
+  **run_phase2 meta 주의: temporal 변형은 data/cohort_meta.csv 단일 참조 —
+  v9o_live 재실행 시 cohort_meta_live.csv로 교체 후 복구 필요**(anchor 로직
+  미패치, 가드레일 준수).
+  **사용자 대기 결정 2건**: (a) 제안서 프레이밍 — 정직 우선(공개 feature
+  ~0.6 안정 신호 리드; 권장) vs 이중 트랙(논문 재현 0.82 방법검증 인용 +
+  자체 ~0.60 병기). (b) 다음 실행 — B/B' tier ablation(Tier-2 증분 +
+  콘텐츠-only)을 제안서 전에 돌릴지. GPU 유휴, 예약 작업 없음.
 
 ### 2026-07-07 (세션 1, 계속) — 다중공선성 정돈 (블록 4)
 - 사용자 지적("feature 상관 큼")으로 감사 실행: workload 블록 VIF 8.6-9.7

@@ -9,6 +9,8 @@ except where marked:
   [GAP-FILL]  logic the public script lost but the paper/design requires
 
 Run: .venv\\Scripts\\python.exe src\\extract.py [--causal]
+        [--tj-csv PATH] override only the TJ-list input (default = repo snapshot)
+        [--out PATH]    override only the output final_df path
 Input : data/raw/statcast_{2016..2023}.parquet (src/download_statcast.py)
         TJS_Prediction/Raw_data/list of TJ.csv, pitcher_hand.csv (repo snapshot)
 Output: data/final_df.csv (--causal: data/final_df_causal.csv, expanding-mean
@@ -99,9 +101,12 @@ def drop_low_quality_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop(columns=drop_col)
 
 
-def merge_tj_labels(df: pd.DataFrame) -> pd.DataFrame:
-    """Stage 5 (upstream L147-223): join TJ registry, derive closest future surgery."""
-    tj_list = pd.read_csv(UPSTREAM_DATA / 'list of TJ.csv')
+def merge_tj_labels(df: pd.DataFrame, tj_csv: Path | None = None) -> pd.DataFrame:
+    """Stage 5 (upstream L147-223): join TJ registry, derive closest future surgery.
+
+    tj_csv overrides ONLY the TJ-list input (default = repo snapshot); it must
+    still expose the mlbamid / 'TJ Surgery Date' / 'Year of TJ' columns."""
+    tj_list = pd.read_csv(tj_csv if tj_csv is not None else UPSTREAM_DATA / 'list of TJ.csv')
     tj_join = tj_list[['mlbamid', 'TJ Surgery Date', 'Year of TJ']].sort_values(
         by=['mlbamid', 'Year of TJ'])
     tj_join['count'] = tj_join.groupby('mlbamid').cumcount() + 1
@@ -313,9 +318,17 @@ def finalize(df: pd.DataFrame, causal: bool = False) -> pd.DataFrame:
     return df[final_cols].sort_values(by=['player_name', 'new_before_tj'])
 
 
+def _arg_value(flag: str) -> str | None:
+    """Return the token after `flag` in argv, or None if the flag is absent."""
+    return sys.argv[sys.argv.index(flag) + 1] if flag in sys.argv else None
+
+
 def main() -> None:
     causal = '--causal' in sys.argv
-    out_csv = ROOT / "data" / ("final_df_causal.csv" if causal else "final_df.csv")
+    tj_csv = Path(v) if (v := _arg_value('--tj-csv')) else None
+    out_override = _arg_value('--out')
+    out_csv = (Path(out_override) if out_override
+               else ROOT / "data" / ("final_df_causal.csv" if causal else "final_df.csv"))
     data = load_raw()
     print(f"raw regular-season pitches: {len(data):,}")
 
@@ -324,7 +337,7 @@ def main() -> None:
     del data
 
     pivot = drop_low_quality_columns(pivot)
-    result = merge_tj_labels(pivot)
+    result = merge_tj_labels(pivot, tj_csv=tj_csv)
     result = filter_by_conditions(result)
     print(f"after eligibility filter: {len(result):,} rows, "
           f"{result['pitcher'].nunique():,} pitchers")

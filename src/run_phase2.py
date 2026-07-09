@@ -50,6 +50,7 @@ PREDS_DIR = RESULTS_DIR / "preds"
 META_CSV = ROOT / "data" / "cohort_meta.csv"
 OURS_CSV = ROOT / "data" / "final_df.csv"
 CAUSAL_CSV = ROOT / "data" / "final_df_causal.csv"
+LIVE_CSV = ROOT / "data" / "final_df_live.csv"
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 SEEDS = range(100, 1001, 100)
@@ -70,6 +71,11 @@ VARIANTS = {
     # most honest retrospective number: artifact-free window x future-season test
     'v9_window_temporal': dict(data=dict(drop_time_channel=True),
                                common_window=True, split='temporal'),
+    # v9 on OUR re-extraction, snapshot vs live TJ labels (label-correction delta)
+    'v9o_snap': dict(csv=OURS_CSV, data=dict(drop_time_channel=True),
+                     common_window=True, split='temporal'),
+    'v9o_live': dict(csv=LIVE_CSV, data=dict(drop_time_channel=True),
+                     common_window=True, split='temporal'),
 }
 
 

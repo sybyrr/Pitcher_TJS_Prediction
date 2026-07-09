@@ -40,9 +40,16 @@ recall@50 29%** (blackout 생존 = 순환 셧다운 아님, 라벨은 라이브 
 검출 한계 이하 (E3 추세·변동성 additive 널, 독립 검증 통과) ③ 생존 신호는
 전부 KBO 공개 계층 feature → 데이터 개방 논거는 "Tier-2 증분 검정"으로
 전환. canonical: `phase2_results.md` Phase 2.6절. 산출물: `results/phase26/`,
-`data/prospective/cohort_v2.parquet` 등. **Phase 3: 계획 v3 제안됨
-(R 강건성 블록 → A 제안서 → B tier ablation; plan_progress.md의 "계획 v3"
-절이 canonical, 실행 가드레일 포함) — 사용자 승인 대기.**
+`data/prospective/cohort_v2.parquet` 등. **Phase 3 진행 중 (계획 v3,
+plan_progress.md 캐노니컬).** R 블록 완료: ① canonical baseline =
+**M-role**(M0''+start_share, 6 feature) — R1 rolling-origin 확정
+(전 fold ROC>0.55, dPR 6/6 양). 선발/불펜 역할이 첫 유의 개선(선발
+수술률 2배 + 역할 내 사용량 감소 위험). ② **회고 대표 수치 하향 정정:
+저자 v9 0.816 → 자체 재추출+성숙 라벨 ROC ~0.60**(블록 6) → 회고·전향
+(~0.64) 대역 수렴, "붕괴" 서사 폐기. ③ R2 age 미채택, R4 = KBO 공개
+라벨 부재 → "구단 내부 부상자명단 접근" 카드. 결과: `results/phase3/`.
+**대기: (a) A 제안서 프레이밍 결정 (정직 우선 vs 이중 트랙) (b) B/B'
+tier ablation 착수 여부.**
 
 ## Key files
 
