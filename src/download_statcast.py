@@ -1,9 +1,12 @@
 """Download raw Statcast pitch data season by season to data/raw/*.parquet.
 
-Season range follows Kang (Mar 1 - Nov 30, 2016-2023). Upstream fetched the
-same ranges in parallel threads; we go sequentially — pybaseball's cache makes
-reruns/resumes cheap and already-downloaded seasons are skipped via the
-parquet file check.
+Season range follows Kang (Mar 1 - Nov 30, 2016-2023) + 2024-2025 (P0-1/A1
+test extensions, 2026-07-10). The 2025 plate_x/z definition change does not
+affect the workload/velocity/role features in use; 2026 stays excluded
+(labels immature).
+Upstream fetched the same ranges in parallel threads; we go sequentially —
+pybaseball's cache makes reruns/resumes cheap and already-downloaded seasons
+are skipped via the parquet file check.
 
 Run: .venv\\Scripts\\python.exe src\\download_statcast.py
 """
@@ -15,7 +18,7 @@ from pathlib import Path
 from pybaseball import cache, statcast
 
 RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
-SEASONS = range(2016, 2024)
+SEASONS = range(2016, 2026)
 
 
 def main() -> None:

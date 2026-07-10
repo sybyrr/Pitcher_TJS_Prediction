@@ -48,8 +48,28 @@ plan_progress.md 캐노니컬).** R 블록 완료: ① canonical baseline =
 저자 v9 0.816 → 자체 재추출+성숙 라벨 ROC ~0.60**(블록 6) → 회고·전향
 (~0.64) 대역 수렴, "붕괴" 서사 폐기. ③ R2 age 미채택, R4 = KBO 공개
 라벨 부재 → "구단 내부 부상자명단 접근" 카드. 결과: `results/phase3/`.
-**대기: (a) A 제안서 프레이밍 결정 (정직 우선 vs 이중 트랙) (b) B/B'
-tier ablation 착수 여부.**
+**B 블록(tier×모델 ablation) 완료 (2026-07-10).** 3줄: ① Tier-2 트래킹
+증분 널 — 달력/경기창/관측 부분집합 3중 확인, +0.05 초과 배제 ② tree
+(HistGBM) 널 — 동일 feature에서 LR과 동급, feature 확장 시 유의 악화,
+경계 밖 확장 그리드도 무효 ③ 콘텐츠-only ROC 0.49-0.55 → 신호는
+사용량·역할·간격, **M-role 유지**. canonical:
+`results/phase3/B_TIER_MODELS.md` + phase2_results.md 블록 7.
+**B'(ii)(iii) 완료 (2026-07-10)**: 급성 감소 flag 단독은 무판별(비 ~1×,
+신호는 만성×역할); H150 포착의 60%가 사용량 정상 시점(lead ~72일), 정상
+하위집단 내 ROC 0.663 → "구단이 이미 안다" 반론에 실측 응답. canonical:
+`results/phase3/B_PRIME_LEAD.md` + phase2_results.md 블록 8.
+**P 블록 + A1/B1 확장 완료 (2026-07-10) — 개선 캠페인 종료.** 진단
+(`results/phase3/NEXT_STEPS_DIAGNOSIS.md`) → 실행·검증
+(`results/phase3/P_BLOCK_RESULTS.md`, phase2_results.md 블록 9). 4줄:
+① **M_sa** 채택(+직전시즌 노출·경력 log·구속결측; H150 dROC +0.017
+EXCL0, rolling 6/6) + **discrete-time hazard supermodel = canonical**
+(H-정합·확률 보정) ② test를 2022-25로 확장(데이터 v4, 사건 94/100) —
+**최종 대표 수치 ROC 0.689/0.693 [0.64-0.74], recall@50 ~28%, 통상 연도
+0.63-0.68, 2024만 outlier 0.80** ③ 사후 검증 통과 — 단 추정량 각주:
+문헌 비교용 스냅샷 ~0.69, "문헌 초과" 주장 금지 ④ 기각 확정: pitch-mix·
+rest·torque·vdecay·tree·role-strat 등 (prior_tjs만 3차 연속 방향 양,
+CI 포함 → KBO/시즌 축적 시 1순위 재검정). **대기: 제안서는 사용자 직접
+작성; 다음 단계 = KBO 이전 패키지(방법론+파이프라인, 계수 재적합 전제).**
 
 ## Key files
 

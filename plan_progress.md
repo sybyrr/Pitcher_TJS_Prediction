@@ -331,6 +331,78 @@ H=365 탐색, within-pitcher 고정효과, Dillon식 최종 등판 이상탐지.
   선행** + paired delta 보고 형식 유지.
 - 스토리(해석) 수정이 필요해지면 근거를 문서에 기록하고 사용자 승인 후 진행.
 
+### 2026-07-10 — B/B' 블록 완료: tier × 모델 ablation (전부 널)
+- 사용자 결정: **제안서 작성은 사용자가 직접**(Claude 몫 아님), 실행 순서 =
+  B(Tier-2 증분) + tree 모델 비교 먼저. tree 시도 합의, "가능성 보이면
+  hyperparameter 탐색" 조건부.
+- 설계·수치 canonical: `results/phase3/B_TIER_MODELS.md`(상세) +
+  `phase2_results.md` 블록 7(판정). {F1=M-role, F2=+Tier-2 12개,
+  F3=콘텐츠-only} × {LR 동결 프로토콜, HistGBM valid-전용 그리드},
+  H90/150, paired bootstrap 1000 공유, M-role 재현 게이트 1e-7 통과.
+- 판정: ① **Tier-2 증분 널 3중 확인** — 달력창(NaN 35-49% 희석 우려) →
+  경기창(최근 5/15경기, NaN<8%) → 관측 부분집합, 전부 CI 0 포함/음수;
+  +0.05 초과 증분 배제. ② **tree 널** — 동일 feature HGB≈LR, feature 확장
+  시 유의 악화(−0.07~−0.08 EXCL0); 경계 밖 확장 그리드 48설정도 무효
+  (valid→test 전이 실패 = selection noise) → **조건부 hyperparameter 탐색은
+  조건 불충족으로 종료**. ③ 콘텐츠-only ROC 0.49-0.55 — 사용량 정보 대체
+  불가. ④ 양성 없음 → rolling-origin 생략(사전 규칙). **M-role 유지.**
+- **B' (ii)(iii) 완료 (같은 날, 사용자 "시작하자")**: canonical
+  `results/phase3/B_PRIME_LEAD.md` + phase2_results.md 블록 8. 핵심: ①
+  급성 감소 flag 단독은 window 수준 무판별(base rate 비 ~1×) — 신호는
+  만성 사용량×역할 ② H150 포착의 60%(9/15)가 사용량 정상 시점, lead
+  중앙값 72일; 정상 하위집단 내 ROC 0.663 [0.58-0.75] ③ H90은 셧다운
+  중첩(4/13 정상) → "150일 조기 프로파일 + 90일 임박 확인" 2단 포지셔닝
+  가능. 포착 n 작아 분수는 점추정. B/B' 블록 전체 종료.
+- G3 논거 확정: "MLB에서 Tier-2 증분 입증"은 불가 → "MLB 규모 검출 한계
+  이하, KBO 내부 라벨과 결합해야 검정 가능(데이터 접근 = 검정력)"으로 전환.
+
+### 2026-07-10 (계속) — 성능 진단 + 다음 스텝 설계안 (ultracode, 사용자 확정 대기)
+- 사용자 요청: "더 나은 성능 가능할 것" → 학습 로그·코드 진단 + 문헌·
+  GitHub·웹 종합 조사로 다음 스텝 구체화 (코드 수정 금지, 설계안만).
+- 실행: 6-agent 워크플로우(진단 3 + 조사 3, opus) → fable 종합 + 핵심
+  수치 2건 재검증. **canonical: `results/phase3/NEXT_STEPS_DIAGNOSIS.md`**.
+- 진단 요지: 버그 없음. 하드 리밋(사건 52-56 플로어, 불펜 구조적 불가 —
+  포착 전원 선발, 문헌 천장 0.61-0.67) + 교정 가능 depressor 2건(조기
+  시즌 workload 구조적 0 — 4월 82% 퇴화, 프로브 +0.01-0.015; vel_trend
+  결측→0) + 2023 약세(0.60 vs 2022 0.69).
+- 설계안: P0-1 2024 확장(test 사건 +50%, 위협 검증 완료, 다운로드 필요) →
+  P0-2 M-role v2 구조 교정 → P1 미니 티어(prior-TJS flag — 검증 결과
+  **보호 방향 0.55×**; pitch-mix 단독 재검정; rest 구조) → P2 discrete-time
+  hazard 재정식화. 기각: 시퀀스 DL·NCC·HGB 추가·Tier-2 재방문.
+- ~~대기 결정 3건~~ → **사용자 승인 (2026-07-10)**: 순서대로 실행, 천장
+  사전 설정 없음, 2024 다운로드 승인.
+
+### 2026-07-10 (계속 2) — P 블록 실행 완료: canonical v4 (hazard, ROC ~0.70)
+- canonical: `results/phase3/P_BLOCK_RESULTS.md` + phase2_results.md 블록 9.
+- P0-1: statcast 2024 다운로드(760k 투구) → v3 데이터(slim/gf/cohort,
+  ≤2023 부분집합 byte-동일 게이트) → test 2022-24, 사건 75/80 (+44%).
+- P0-2: **M_sa 채택** (+prior_pc_rate, ncg_log, vt_missing; H150 dROC
+  +0.017 EXCL0, rolling 6/6 양, ridge 동일). M_bf 백필은 재검 기각.
+- P1: 미니 티어 전부 미채택 (prior_tjs는 방향 양 + evrec@50 +4, CI 포함 —
+  사건 확대 시 1순위 재검정 후보로 기록).
+- P2: **hazard supermodel 채택 = canonical v4** — ROC 0.701/0.708,
+  H-정합 보장(이진 쌍 47% 위반 해소), plain LR 확률 보정. role-strat 미채택.
+- 대표 수치: 3년 평균 ~0.70 (연도 0.62-0.82). 산출물: results/phase3/
+  p0_*/p1_*/p2_* csv + scripts/. 데이터: data/prospective/*_v3.parquet.
+- 코드 변경: src/download_statcast.py SEASONS → 2024 포함 (기본 동작:
+  기존 시즌 스킵). 나머지는 전부 신규 스크립트 (기존 코드 무수정).
+- 남은 것: 제안서(사용자 직접) 수치 갱신 반영 + 필요 시 hazard 모델의
+  운영 산출물(월간 순위 시트) 생성.
+
+### 2026-07-10 (계속 3) — 사후 검증 + A1/B1 확장, 개선 캠페인 종료
+- 사후 적대 검증(사용자 "문헌 초과 의심"): 라벨 실재·as-of 무결·M_sa의
+  2024 비의존성 통과. **핵심 각주 = 추정량 차이**: window-pooled 0.70 vs
+  문헌 비교용 스냅샷 ~0.69; 2022-23은 문헌 대역 안. "문헌 초과" 주장 금지.
+  P_BLOCK_RESULTS.md 검증 절.
+- A1: 2025 test 추가(라벨 성숙 재점검 통과) → **데이터 v4, test 사건
+  94/100**. 2025는 보통 해(0.63-0.65) → 2024 outlier 확정.
+- **최종 대표 수치: hazard, test 2022-25, ROC 0.689/0.693 [0.64-0.74],
+  recall@50 ~28%, 통상 연도 0.63-0.68.**
+- B1 경기 내 구속 감쇠 기각(널). prior_tjs 3차 미채택(방향 양 지속,
+  CI 0 포함 — KBO/시즌 축적 시 1순위). A2/B2 보류(기대값·검정력 부족).
+- **개선 캠페인 종료 판단**: 현 데이터 계층의 레버 소진. 다음은 KBO 이전
+  패키지 (방법론+파이프라인+진단, 계수 재적합 전제).
+
 ### 2026-07-08 — 계획 v3 승인, R 블록 완료 (R3 GPU 재실행 진행 중)
 - **R1 rolling-origin: 기준 (a)(b) 모두 PASS.** 전 12 cell(모델×연도×H)
   ROC>0.55(최저 0.572), M-role의 dPR·dROC 점추정 6/6 fold 양(+). 2023
