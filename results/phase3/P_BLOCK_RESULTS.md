@@ -27,6 +27,15 @@
 > 회고 F1@0.5는 임의 작동점(threshold 미구현)이므로 배치 성능으로 인용
 > 금지. 이하 본문은 이력 보존을 위해 원문 유지.
 
+> **추가 정정 (2026-07-13, 실행 전 문서 감사):** E0A는 primary
+> reliable end 2024-12-31뿐 아니라 full 2-year safety end 2024-06-30도
+> 명시했다. 동일 모델을 후자에 적용한 민감도는 H90 ROC 0.660
+> [0.596,0.726] (사건 67), H150 0.665 [0.603,0.726] (사건 56)이다.
+> primary 수치를 대체하지는 않지만 반드시 함께 보고한다. 또한 2025 성능은
+> 이미 아래 A1 절에서 조회했으므로, 라벨 완결 후에도 untouched/prospective
+> test가 아니라 label-refresh robustness set이다. 진짜 전향 확인은 최종
+> 모델·계수·정책 동결 뒤 점수를 사전 timestamp한 새 decision cohort로 한다.
+
 순서: P0-1(2024 확장) → P0-2(구조 교정) → P1(미니 티어) → P2(모델 형태).
 전 단계 사전 등록 paired 검정, 동결 프로토콜(clustered bootstrap seed 0 공유,
 event recall@k), 각 단계 게이트 통과. 코드 `scripts/p0_*.py, p1_tiers.py,

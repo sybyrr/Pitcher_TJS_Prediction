@@ -1,6 +1,7 @@
 # 계획 및 진행상황
 
-목적: 승인된 실행 계획의 canonical 정의와 세션별 진행 로그.
+목적: 승인된 실행 계획의 canonical 정의와 세션별 진행 로그. 현재 실행
+상태는 파일 끝의 2026-07-13 실행 전 감사 절을 우선한다.
 계획 v1은 2026-07-06 논의에서 확정 (B안: 재현 + 진단 + KBO-지향 ablation),
 **v2는 같은 날 Phase 1 종료 + ultracode 검증 결과를 반영해 개정** (개정 근거는
 진행 로그 마지막 항목). 관련 문서: `kang_repo_audit.md`(코드 감사·환경),
@@ -21,7 +22,7 @@
   배치가 불가능하므로(사후 정보로 시간축 정렬), 전향적 재설계(Phase 2.5)가
   KBO 적용의 전제 조건이다.
 
-## 계획 (v2)
+## 계획 (역사적 v2 단계 정의; 현재 실행 순서는 파일 끝 최신 절 우선)
 
 ### Phase 0 — 데이터 기반 구축 [완료]
 - Statcast 2016–2023, 추출·전처리 포팅, 저자 final_df 확보·대조.
@@ -447,7 +448,7 @@ H=365 탐색, within-pitcher 고정효과, Dillon식 최종 등판 이상탐지.
      → test에 적용, calibration-in-the-large/slope/Brier/reliability 보고.
   3. hazard 민감도: (i) 사건-가중(양성 구간 가중 1/landmark 수) (ii) s
      범주형 baseline — paired 점추정 비교.
-  4. **동결**: 위 완료 후 `results/phase3/FROZEN_MODEL.md`에 스펙+계수
+  4. **동결 [후속 정정으로 대체됨]**: 위 완료 후 `results/phase3/FROZEN_MODEL.md`에 스펙+계수
      고정 기록, "2025-26 라벨 성숙(~2027 중반) 시 1회 전향 확인" 명시.
      이후 MLB 쪽 모델 변경 금지.
 - **A1 불펜 mini-block 사양 (H150 primary, H90 secondary)**:
@@ -536,3 +537,128 @@ H=365 탐색, within-pitcher 고정효과, Dillon식 최종 등판 이상탐지.
   성능 동등·recall 개선) → **M0''(만성 수준+급성 이탈 재매개화, max VIF
   1.64)를 canonical baseline으로 확정**. 계수 해석 가능해짐: "만성 사용량
   낮음 + 최근 급감 = 고위험". 상세: `phase2_results.md` 블록 4.
+
+### 2026-07-13 (최신) — Codex 실행 전 감사 및 권한 동기화
+- **실행 없음**: 코드·데이터 수정, 파일로 저장한 다운로드, 승인 블록 실행
+  모두 하지 않음. 사용자의 최신 지시에 따라 `.md`만 정정했다. 이후 `.md`
+  외 작업은 별도 `시작` 지시가 필요하다.
+- 큰 순서 **A0(1-3) → A1 → A-IL → 동결**은 유지할 가치가 있으나, 현재
+  사양은 아직 기계적 실행 준비가 끝나지 않았다. 사용자 설계 확정 전 보강할
+  항목: A0 inner split/비열등 margin·동률 규칙, calibration OOF의 시간·투수
+  분리, A1 역할 임계값·정확한 6개 feature·shrinkage·quota grid, A-IL
+  regex/episode dedup/coverage gate·near-t 승격 기준.
+- A0-1은 현재 정의대로면 전체 adaptive selection optimism이 아니라 사전
+  고정 3후보의 nested stability audit이다. 낙관은 `inner 선택 추정치 - 선택된
+  모델의 outer 성능`으로 별도 정의해야 한다. A0-2는 H90/H150 공동 정합을
+  깨지 않는 grouped/temporal cross-fit, A0-3은 양성 가중 외 cluster-level
+  full-refit 민감도를 사전 고정해야 한다.
+- A1에서 "H150 primary"는 **불펜 블록 채택 판정**에 한정하고 전체 시스템은
+  H90/H150 공동 출력으로 유지한다. validation 2021의 distinct 사건은 17개라
+  단일 최적 quota보다 pre-test rolling fold의 안정 영역을 사용해야 한다.
+- A-IL은 placement/transfer/activation을 episode로 합치고, transaction
+  `date`를 정보시점으로 사용한다. near-t 공개 진단만으로 통과하지 않도록
+  30/60/90일 lag 또는 blackout 민감도와 조기신호 승격 기준을 먼저 정한다.
+- **라벨 경계 민감도 추가 확인(읽기 전용)**: E0A가 명시한 full 2-year
+  safety end `2024-06-30` 적용 시 hazard ROC는 H90 0.660 [0.596,0.726]
+  (67 사건), H150 0.665 [0.603,0.726] (56 사건). primary 0.701/0.696은
+  유지하되 2024 강세 연도/경계 의존성을 함께 보고해야 한다. safety 경계의
+  novel ROC는 0.572/0.557이므로 KBO 기대치를 0.66으로 고정하지 않는다.
+- **전향 확인 표현 정정**: 2025 성능은 이미 조회되었으므로 향후 라벨 갱신도
+  untouched test가 아니다. 2025는 label-refresh robustness set으로만 쓰고,
+  진짜 전향 평가는 동결 뒤 처음 timestamp한 미조회 decision cohort에서 한다.
+- **A-IL 소스 소표본 점검(파일 저장 없음)**: MLB StatsAPI 2016/2024 표본에서
+  부위 텍스트는 대체로 존재했지만 retroactive `effectiveDate`, 부위 누락,
+  transfer/activation 중복, 수술 후 회복 문구가 함께 확인됐다. 정보시점은
+  transaction `date`, placement episode만 사용하고 파싱 coverage/정확도
+  gate를 성과 조회 전에 동결해야 한다.
+- 상태: **사용자 검토 및 설계 확정 대기**. 위 보강 전에는 승인 블록을
+  실행하지 않는다.
+
+### 2026-07-13 (계속 3) — codex 2차 감사 수용 + 실행 사양 v2 확정 (fable)
+
+- **codex 수치 검증 (fable 재계산, scratchpad read-only — 프로젝트 파일
+  없음)**: safety 경계 `t+H≤2024-06-30`에서 H90 0.6595 [0.596,0.726]
+  사건 67 / H150 0.6652 [0.603,0.726] 사건 56, novel 0.572/0.557,
+  RP-내 0.601/0.621, lift 1.57×(P=.043)/1.43×(P=.072) — **codex 보고와
+  반올림까지 전부 일치, 수용 확정**. 방법론 지적 6건(A0-1 정의, OOF
+  grouping, cluster 민감도, A1 자유도, A-IL leakage, 2025 재분류)도
+  전부 타당 판정.
+- **인용 규칙 (확정)**: primary 0.701/0.696은 항상 safety 경계
+  0.660/0.665와 병기. KBO 기대치는 novel 대역 **~0.56–0.68**로 인용
+  (0.66 단일값 금지). "H150 primary"는 A1 블록 채택 판정에 한정, 시스템
+  출력은 H90/H150 공동 유지.
+- **아래가 사전 등록 사양 v2 — "2026-07-13 (계속)" 절의 사양과 충돌 시
+  v2가 우선. 사용자 "시작" 지시 후 이대로 기계적 실행 (재설계 금지).**
+
+**A0-1 (개명: nested 3-후보 안정성 감사)** — 전체 adaptive search 낙관이
+아니라 사전 고정 3후보 선택의 안정성 감사이며, 결과는 **전체 낙관의
+하한**으로만 해석·보고한다.
+- fold Y∈{2022,2023,2024}; outer 평가 = 연도 Y 창 (t+H≤2024-12-31 유지).
+- inner 분할: fit = 연도 ≤ Y−2, inner-valid = 연도 Y−1.
+- 등록된 선택 경로: 후보 {M-role, M_bf, M_sa} 이진 LR → inner-valid
+  paired 점추정 ROC(H90·H150 평균) 최고 선택; **동률 규칙**: 차이 <0.002면
+  feature 수 적은 쪽. 이후 hazard form은 inner-valid ROC(hazard) ≥
+  ROC(이진) − 0.005(**비열등 margin**)이면 채택.
+- **낙관 정의 = fold별 [inner-valid 추정 ROC(선택 모델) − outer 연도 Y
+  ROC(같은 모델)]**, 3-fold 평균 보고. secondary: outer(선택) −
+  outer(고정 M_sa+hazard). 보고 전용, canonical 불변.
+
+**A0-2 (재보정)** — row-random 5-fold 금지.
+- cross-fit: fit set(2017-21)에서 **투수-grouped 5-fold** OOF person-period
+  hazard 예측 생성.
+- 재보정 위치 = **hazard 구간 수준 공동 재보정**: OOF 구간 예측 logit에
+  로지스틱(a+b·logit h) 적합 → 재보정 h̃로 P(H)=1−∏(1−h̃) 재계산 —
+  P90≤P150 정합 유지. H별 marginal Platt은 참고용 민감도(정합 깨질 수
+  있음 명시), temporal(leave-one-year-out) cross-fit도 민감도로 병행.
+- 보고: calibration-in-the-large / slope / Brier / decile reliability를
+  mature test와 safety 경계 각각에서.
+
+**A0-3 (hazard·cluster 민감도)** — 기존 (i) 사건 가중(양성 구간
+1/landmark 수) (ii) s 범주형 baseline에 추가:
+- (iii) **cluster-level full-refit bootstrap**: fit-set 투수 단위 재표집
+  B=200, 매회 hazard 재적합 → 고정 mature test ROC 분포 (적합 불확실성
+  반영 CI).
+- (iv) **수술당 단일 landmark 민감도**: fit set에서 각 (투수, 수술)의
+  양성 구간을 수술에 가장 가까운 landmark 1개만 유지(규칙 고정:
+  min(수술일−t)), 재적합 → paired 점추정. 전부 보고 전용.
+
+**A1 (불펜) 사양 v2**
+- 역할: **모델링용 3분류** — trailing 365d GS share(등판 중 GS 비율)
+  ≥0.5 SP / ≤0.2 RP / 나머지 swing. 5분류(starter/opener·bulk/swing/
+  short RP/long RP)는 기술 통계·오류 분석 전용 (opener는 "팀 첫 투수 &
+  투구 <30" 근사 — 서술용, 모델 미사용).
+- feature **정확히 6개 고정**: pitches_7d, pitches_14d, appearances_14d,
+  b2b_count_30d(연속일 등판 횟수), three_in_four_count_30d,
+  last_outing_spike(직전 등판 투구수 − trailing 90d 등판당 중앙값).
+  2일 창은 제거(days_since_last와 중복).
+- 모델 비교: pooled vs role-interaction vs SP·RP 분리 — 분리 모델은
+  ridge C=0.1 고정(소사건).
+- Cohen 2022 release-drift×RP 1회 사전 등록 검정 유지 (널이면 종료).
+- 경보 quota: 단일 최적 대신 **안정 영역 규칙** — RP 예약 slot grid
+  {0,5,10,15,20}/50을 pre-test rolling fold Y∈{2019,2021}(fit<Y;
+  2020은 단축 시즌으로 제외)에서 Pareto 계산, **모든 fold에서 총 사건
+  손실 ≤1 (vs quota 0)**을 만족하는 최대 RP quota 채택; fold 간 불일치
+  시 작은 쪽(보수). test 1회 적용, 채택 게이트 유지 = RP 포착 증가 AND
+  총 recall 손실 ≤2건. Moore 2026 torque는 코드 확보 전 제외 유지.
+
+**A-IL 사양 v2**
+- 정보시점 = transaction **`date`** (retroactive effectiveDate 금지).
+- episode 구성: placement→transfer→activation 체인을 1 episode로 병합
+  (activation 또는 60일 무활동으로 종결), 중복 placement 제거, 마이너
+  트랜잭션 제거(MLB 소속 필터), "recovering from Tommy John surgery"류는
+  신규 팔꿈치 episode에서 제외하고 post-TJS 상태 플래그로 별도 분류.
+- **성능 조회 전 동결 게이트**: ① 키워드 regex 셋 고정·문서화(elbow/
+  forearm/UCL/ulnar/Tommy John, 대소문자 무시) ② 연도별 episode 수
+  sanity + 무작위 40건 수동 검수 정밀도 ≥90%. 게이트 기록 후에만 평가.
+- **blackout 민감도 필수**: t 직전 {30,60,90}일 내 IL 이벤트 제외
+  재계산. **승격 기준(사전 등록): 60일 blackout에서도 paired 개선
+  방향(점추정 양) 유지 시에만 canonical 후보** — 아니면 "공개 진단 후
+  triage 신호"로 분류, canonical 제외·별도 문서화.
+- 신규 정보 분해(B'식) + lead 분해 필수 — 기존 유지.
+
+**동결·전향 확인 (정정 반영)**
+- 동결 = 전 블록 종료 후 FROZEN_MODEL.md에 스펙+계수+재보정+quota 정책
+  고정, **그리고 당월 decision cohort 점수를 timestamp 저장** — 이
+  시점부터가 진짜 전향 평가의 시작. 2025 창은 label-refresh robustness
+  set으로만 사용(이미 조회되어 untouched 아님).
+- 상태: **사양 v2 사전 등록 완료. 실행은 사용자 "시작" 지시 대기.**

@@ -19,8 +19,9 @@ MLB 투수의 Tommy John Surgery 위험을 경기 데이터로 예측한 Kang et
 
 1. **G1 재현 [달성]**: 분류 AUC 0.92 / 회귀 R² 0.783 / SHAP 일치. 이
    baseline은 동결, 모든 수정은 변형으로 대조.
-2. **G2 정직한 평가 [달성]**: 누수·아티팩트 교정 후 배치 상황(미래 시즌)
-   성능 확정 — 조건부 backtest ROC 0.70/0.696 (PROJECT_MEMORY.md 3절).
+2. **G2 정직한 평가 [조건부 backtest 정리]**: 누수·아티팩트 교정 후
+   primary ROC 0.701/0.696. untouched test가 없어 확정적 전향 성능은 아니며,
+   E0A safety 경계 민감도와 함께 인용한다 (PROJECT_MEMORY.md 3절).
 3. **G3 KBO 이전 [진행]**: 현재까지 데이터만으로 계산 가능한 전향 위험
    지표(순위+근거). 이전 대상은 방법론·파이프라인, **계수는 KBO 재적합**.
 
@@ -30,15 +31,17 @@ MLB 투수의 Tommy John Surgery 위험을 경기 데이터로 예측한 Kang et
 - **Phase 2/2.5/2.6 [완료]**: 논문 수치 해체(회귀=개인 내 보간, 분류 ~0.11
   이력길이 아티팩트; 정직 회고 ~0.60) → 전향 재설계(월별 결정일, TJS-only,
   미래 시즌 test)에서 workload LR ROC 0.64 → `phase2_results.md`.
-- **Phase 3 [실험 종료]**: R(역할 채택·회고 정정) → B/B'(트래킹 증분 널,
+- **Phase 3 [주 개선 캠페인 종료, 최종 검증 블록 대기]**: R(역할 채택·회고 정정) → B/B'(트래킹 증분 널,
   tree 널, 콘텐츠-only ~0.5, 경보의 60%가 사용량 정상 시점) → P(진단 →
   M_sa 채택 → hazard supermodel canonical → 2024 확장) → **codex 외부
   감사 수용(2026-07-13)**: 2025 라벨 미완결로 2022-25 수치 철회, 정정
   canonical = **H90 0.701 / H150 0.696 (조건부 backtest, 사건 75/80)**.
   상세·정정 전문: `results/phase3/P_BLOCK_RESULTS.md`.
-- **승인됨(2026-07-13, 사양 = plan_progress.md, compact 후 "시작" 지시
-  대기)**: **A0(1-3) → A1 불펜 → A-IL(팔꿈치-IL 이력 feature, MLB) →
-  동결** 순서로 기계적 실행. 라벨은 TJS-only 불변(IL은 feature만).
+- **승인됨(2026-07-13, 사양 v2 = plan_progress.md "2026-07-13 (계속 3)"
+  절 — codex 2차 감사 반영·fable 수치 검증 완료)**: **A0(1-3) → A1 불펜
+  → A-IL(팔꿈치-IL 이력 feature, MLB) → 동결** 순서로 기계적 실행.
+  라벨은 TJS-only 불변(IL은 feature만). primary 0.701/0.696은 safety
+  경계 0.660/0.665와 항상 병기; KBO 기대치는 novel 대역 ~0.56–0.68.
 - **대기**: 사용자 "시작" 지시; 제안서(사용자 직접 작성).
 
 ## Key files
@@ -71,9 +74,12 @@ data/                         # raw parquet + prospective v2-v4 — gitignore
 
 ## 프로젝트 규칙 (상세·근거: PROJECT_MEMORY.md 1–2절)
 
-- 학습(training)·새 실험 블록은 **사용자 명시 지시 후에만** 시작.
+- `.md` 외 코드·데이터·설정의 생성·수정·다운로드 및 승인된 계획/실험
+  실행은 **사용자 명시 지시 후에만** 시작. 읽기 전용 점검과 파일을 남기지
+  않는 진단 재계산만 가능.
 - `TJS_Prediction/` 수정 금지; 저자 final_df.csv는 GitHub 업로드 절대 금지.
-- 라벨 TJS-only 고정 (팀원 트랙과 충돌 방지).
+- 라벨 TJS-only 고정 (팀원 트랙과 충돌 방지). arm-IL은 auxiliary feature
+  한정 승인, 별도 `시작` 지시 전 실행 금지.
 - 외부 레퍼런스는 setup 대조·검증 후 채택, 수치 이식 금지.
 - 동결 프로토콜(코호트·fold·평가·anchor 게이트)은 재검토 없이 변경 금지.
 - 블록/세션 종료마다 문서 갱신; "md 업데이트" 요청 시 **CLAUDE.md +
