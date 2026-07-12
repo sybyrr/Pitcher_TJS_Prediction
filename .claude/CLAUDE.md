@@ -1,163 +1,101 @@
-# Pitcher TJS Prediction (Kang 2025 재현 → KBO 적용)
+# Pitcher TJS Prediction (Kang 2025 재현 → KBO 이전)
 
-MLB 투수의 Tommy John Surgery 위험을 경기 데이터만으로 예측한 Kang et al. 2025
-(*J Big Data* 12:87)를 재현하고, 최신 데이터로 확장한 뒤, 그 결과를 근거로
-KBO 구단에 트래킹 데이터 접근을 요청하는 것이 최종 목표인 연구 프로젝트.
+MLB 투수의 Tommy John Surgery 위험을 경기 데이터로 예측한 Kang et al. 2025
+(*J Big Data* 12:87)를 재현·해체하고, 배치 가능한 전향 위험 지표로 재설계한
+뒤, 그 방법론을 근거로 KBO 구단에 데이터 접근을 요청하는 연구 프로젝트.
 
-Read in this order on session start for fast context:
-1. This file — current status at a glance
-2. `plan_progress.md` — 계획(v2, G1–G3) + 세션별 진행 로그
-3. `phase2_results.md` — Phase 2/2.5/2.6 결과 canonical (변형표, 전향 재설계)
-4. `phase2_findings.md` — 검증 발견 36건 / `phase2_worklog.md` — 실행 아카이브
-5. `Kang_2025_TJS_Prediction.md`(논문), `kang_repo_audit.md`(코드 감사·환경),
+## 세션 시작 읽기 순서
+
+1. 이 파일 — 상태 한눈에
+2. `PROJECT_MEMORY.md` — **공유 가드레일·canonical 수치·기각 이력·인용
+   금지 목록** (Claude·codex 공용 단일 원본)
+3. `plan_progress.md` — 계획(G1–G3, v3) + 세션별 진행 로그
+4. `phase2_results.md` — Phase 2/2.5/2.6/3 결과 canonical (블록 1–9)
+5. 상세: `results/phase3/*.md` (최신 수치는 P_BLOCK_RESULTS.md 정정 헤더),
+   `Kang_2025_TJS_Prediction.md`(논문 전사), `kang_repo_audit.md`,
    `reproduction_and_dataset.md`, `KBO_applicability.md`
 
-## Goal (v2, 2026-07-06 개정 — canonical은 plan_progress.md의 G1–G3)
+## 목표 (canonical: plan_progress.md G1–G3)
 
-1. **G1 재현** [달성]: Kang 동일 정의로 분류 F1 0.71/AUC 0.92, 회귀 R² 0.783
-   재현 완료. 이 baseline은 동결, 모든 수정은 변형으로 대조.
-2. **G2 정직한 평가**: 누수·아티팩트 교정 후 배치 상황(새 투수·미래 시즌)의
-   성능 확정. 수치 하락은 실패가 아니라 산출물.
-3. **G3 KBO 이전**: 최종 산출물은 **현재까지의 데이터만으로 계산 가능한
-   전향적 부상 위험 지표**(위험도 순위 + 역학 근거). 전향적 재설계(Phase 2.5)가
-   전제 조건이며, feature-tier ablation은 교정된 파이프라인 위에서 수행.
-   2025–2026 데이터는 제외 (plate_x/z 정의 변경 + 라벨 미성숙).
+1. **G1 재현 [달성]**: 분류 AUC 0.92 / 회귀 R² 0.783 / SHAP 일치. 이
+   baseline은 동결, 모든 수정은 변형으로 대조.
+2. **G2 정직한 평가 [달성]**: 누수·아티팩트 교정 후 배치 상황(미래 시즌)
+   성능 확정 — 조건부 backtest ROC 0.70/0.696 (PROJECT_MEMORY.md 3절).
+3. **G3 KBO 이전 [진행]**: 현재까지 데이터만으로 계산 가능한 전향 위험
+   지표(순위+근거). 이전 대상은 방법론·파이프라인, **계수는 KBO 재적합**.
 
-## Current status (2026-07-07)
+## 현재 상태 (2026-07-13)
 
-**Phase 1 완전 종료 — 분류·회귀·SHAP 전부 재현.** 분류: ViT 0.71/0.92(논문
-0.73/0.93), 나머지 4모델 논문과 일치, 순위 동일. 회귀: R² 0.783±0.019(논문
-0.79), RMSE 94.6(논문 95.7). SHAP: distinct 20개 동일, 평균 |SHAP| top-3 동일
-집합(release_speed_FF·spin_axis_FF·release_extension_SL). 결과: `results/`.
-**Phase 2 + 2.5 완료 (2026-07-07 야간 자율 실행).** 결과 canonical:
-`phase2_results.md`. 3줄: ① 회귀 신투수 R² 음수(논문 0.79는 within-pitcher
-보간) ② 정직한 회고 분류 수치 = **AUC 0.816** (fill-artifact 제거 × 미래
-시즌; 논문 0.93 중 ~0.11은 이력길이 아티팩트) ③ 전향(rolling) 예측은 현
-설계에서 무작위 수준. **Phase 2.6(전향 재설계) 실행 완료 (2026-07-07).**
-3줄: ① 정직 전향 수치 = workload LR **ROC 0.64 / PR lift 1.6× / event
-recall@50 29%** (blackout 생존 = 순환 셧다운 아님, 라벨은 라이브 시트로
-교정 — 스냅샷에 2022-23 수술 71건 누락이었음) ② 급성 조기경보 성분은
-검출 한계 이하 (E3 추세·변동성 additive 널, 독립 검증 통과) ③ 생존 신호는
-전부 KBO 공개 계층 feature → 데이터 개방 논거는 "Tier-2 증분 검정"으로
-전환. canonical: `phase2_results.md` Phase 2.6절. 산출물: `results/phase26/`,
-`data/prospective/cohort_v2.parquet` 등. **Phase 3 진행 중 (계획 v3,
-plan_progress.md 캐노니컬).** R 블록 완료: ① canonical baseline =
-**M-role**(M0''+start_share, 6 feature) — R1 rolling-origin 확정
-(전 fold ROC>0.55, dPR 6/6 양). 선발/불펜 역할이 첫 유의 개선(선발
-수술률 2배 + 역할 내 사용량 감소 위험). ② **회고 대표 수치 하향 정정:
-저자 v9 0.816 → 자체 재추출+성숙 라벨 ROC ~0.60**(블록 6) → 회고·전향
-(~0.64) 대역 수렴, "붕괴" 서사 폐기. ③ R2 age 미채택, R4 = KBO 공개
-라벨 부재 → "구단 내부 부상자명단 접근" 카드. 결과: `results/phase3/`.
-**B 블록(tier×모델 ablation) 완료 (2026-07-10).** 3줄: ① Tier-2 트래킹
-증분 널 — 달력/경기창/관측 부분집합 3중 확인, +0.05 초과 배제 ② tree
-(HistGBM) 널 — 동일 feature에서 LR과 동급, feature 확장 시 유의 악화,
-경계 밖 확장 그리드도 무효 ③ 콘텐츠-only ROC 0.49-0.55 → 신호는
-사용량·역할·간격, **M-role 유지**. canonical:
-`results/phase3/B_TIER_MODELS.md` + phase2_results.md 블록 7.
-**B'(ii)(iii) 완료 (2026-07-10)**: 급성 감소 flag 단독은 무판별(비 ~1×,
-신호는 만성×역할); H150 포착의 60%가 사용량 정상 시점(lead ~72일), 정상
-하위집단 내 ROC 0.663 → "구단이 이미 안다" 반론에 실측 응답. canonical:
-`results/phase3/B_PRIME_LEAD.md` + phase2_results.md 블록 8.
-**P 블록 + A1/B1 확장 완료 (2026-07-10) — 개선 캠페인 종료.** 진단
-(`results/phase3/NEXT_STEPS_DIAGNOSIS.md`) → 실행·검증
-(`results/phase3/P_BLOCK_RESULTS.md`, phase2_results.md 블록 9). 4줄:
-① **M_sa** 채택(+직전시즌 노출·경력 log·구속결측; H150 dROC +0.017
-EXCL0, rolling 6/6) + **discrete-time hazard supermodel = canonical**
-(H-정합·확률 보정) ② test를 2022-25로 확장(데이터 v4, 사건 94/100) —
-**최종 대표 수치 ROC 0.689/0.693 [0.64-0.74], recall@50 ~28%, 통상 연도
-0.63-0.68, 2024만 outlier 0.80** ③ 사후 검증 통과 — 단 추정량 각주:
-문헌 비교용 스냅샷 ~0.69, "문헌 초과" 주장 금지 ④ 기각 확정: pitch-mix·
-rest·torque·vdecay·tree·role-strat 등 (prior_tjs만 3차 연속 방향 양,
-CI 포함 → KBO/시즌 축적 시 1순위 재검정). **대기: 제안서는 사용자 직접
-작성; 다음 단계 = KBO 이전 패키지(방법론+파이프라인, 계수 재적합 전제).**
+- **Phase 1 [완료]**: Kang 분류·회귀·SHAP 완전 재현 → `results/`.
+- **Phase 2/2.5/2.6 [완료]**: 논문 수치 해체(회귀=개인 내 보간, 분류 ~0.11
+  이력길이 아티팩트; 정직 회고 ~0.60) → 전향 재설계(월별 결정일, TJS-only,
+  미래 시즌 test)에서 workload LR ROC 0.64 → `phase2_results.md`.
+- **Phase 3 [실험 종료]**: R(역할 채택·회고 정정) → B/B'(트래킹 증분 널,
+  tree 널, 콘텐츠-only ~0.5, 경보의 60%가 사용량 정상 시점) → P(진단 →
+  M_sa 채택 → hazard supermodel canonical → 2024 확장) → **codex 외부
+  감사 수용(2026-07-13)**: 2025 라벨 미완결로 2022-25 수치 철회, 정정
+  canonical = **H90 0.701 / H150 0.696 (조건부 backtest, 사건 75/80)**.
+  상세·정정 전문: `results/phase3/P_BLOCK_RESULTS.md`.
+- **승인됨(2026-07-13, 사양 = plan_progress.md, compact 후 "시작" 지시
+  대기)**: **A0(1-3) → A1 불펜 → A-IL(팔꿈치-IL 이력 feature, MLB) →
+  동결** 순서로 기계적 실행. 라벨은 TJS-only 불변(IL은 feature만).
+- **대기**: 사용자 "시작" 지시; 제안서(사용자 직접 작성).
 
 ## Key files
 
 ```
-plan_progress.md              # Phase 0–3 계획 + 진행 로그 (세션 종료 시 갱신)
+PROJECT_MEMORY.md             # 공유 컨텍스트 단일 원본 (가드레일·수치·기각 이력)
+AGENTS.md                     # codex 진입점 (이 파일과 함께 갱신)
+plan_progress.md              # 계획 + 진행 로그 (블록/세션 종료 시 갱신)
+phase2_results.md             # 결과 canonical (블록 1-9, 정정 이력 포함)
+results/phase3/               # Phase 3 결과 md + CSV + scripts/ (재현 코드)
 Kang_2025_TJS_Prediction.md   # 원 논문 layout-aware 전사본 (수치 기준점)
-kang_repo_audit.md            # 코드 감사 + 환경 기록 (함정 목록의 canonical 소스)
-reproduction_and_dataset.md   # 재현 검토 + 데이터셋 정의 (2016–2023 / +2024 / 2025–26 제외)
+kang_repo_audit.md            # upstream 코드 감사 + 환경 기록 (함정 목록)
+reproduction_and_dataset.md   # 재현 검토 + 데이터셋 정의 (라벨 신뢰: E0A)
 KBO_applicability.md          # KBO 이전 전략 검토
-src/download_statcast.py      # Statcast 시즌별 다운로드 → data/raw/*.parquet
-src/extract.py                # final_df 재구축 (upstream 1:1 + [GAP-FILL]/[DEVIATION] 마커)
-src/prep_classification.py    # final_df → X(N,224,103)/y 텐서 (Prepfortrain 포트)
-src/compare_final_df.py       # 재추출본 vs 저자본 정량 비교
-src/run_phase2.py             # Phase 2 분류 변형 러너 (VARIANTS 레지스트리 canonical;
-                              #   전체 Phase 2/2.5 코드 목록은 phase2_results.md 산출물 인덱스)
-results/                      # Phase 1 재현 + phase2/ 변형 결과 CSV
-scripts/verify_env.py         # 환경 검증 (모델 forward + statcast fetch, 학습 X)
-TJS_Prediction/               # upstream 클론 (수정 금지, gitignore) + Raw_data/final_df.csv(저자본)
-data/                         # raw parquet, 재추출 final_df (gitignore됨)
-requirements.txt              # 직접 의존성 (+ requirements.lock.txt 전체 핀)
-.venv/                        # Python 3.11.11 (uv 관리, gitignore됨)
+src/download_statcast.py      # Statcast 다운로드 (2016-2025) → data/raw/
+src/extract.py                # final_df 재구축 (upstream 1:1 + 마커)
+src/run_phase2.py             # Phase 2 변형 러너 (VARIANTS 레지스트리)
+scripts/verify_env.py         # 환경 검증 (모델 forward + fetch, 학습 X)
+TJS_Prediction/               # upstream 클론 — 수정 금지, gitignore
+data/                         # raw parquet + prospective v2-v4 — gitignore
+.venv/                        # Python 3.11.11 (uv), torch는 cu128 인덱스
 ```
 
-## How to run
+## 실행
 
 ```powershell
-.venv\Scripts\python.exe scripts\verify_env.py   # 환경 검증 (9/9 통과 기대)
-# 환경 재구축이 필요하면 requirements.txt 헤더의 uv 커맨드 참조
+.venv\Scripts\python.exe scripts\verify_env.py   # 9/9 통과 기대
+# 환경 재구축은 requirements.txt 헤더의 uv 커맨드 참조
 ```
-env: `.venv/` (uv 기반, Python 3.11.11). torch는 반드시 cu128 인덱스에서 설치.
 
-## Project rules
+## 프로젝트 규칙 (상세·근거: PROJECT_MEMORY.md 1–2절)
 
-- **학습(training) 실행은 사용자 명시 요청 후에만 시작한다.**
-- `TJS_Prediction/`(upstream 클론)은 수정하지 않는다. 재현 코드는 별도
-  디렉토리(`src/` 예정)에 작성하고, upstream과의 차이를 문서화한다.
-- 대량 Statcast 다운로드는 `pybaseball.cache.enable()` 켜고 진행.
-- 코드 수정 시 karpathy-guidelines 스킬을 로드한다. 서브에이전트 위임 시
-  가벼운 읽기/조사는 opus, 높은 수준의 추론·설계는 fable(메인)로.
+- 학습(training)·새 실험 블록은 **사용자 명시 지시 후에만** 시작.
+- `TJS_Prediction/` 수정 금지; 저자 final_df.csv는 GitHub 업로드 절대 금지.
+- 라벨 TJS-only 고정 (팀원 트랙과 충돌 방지).
+- 외부 레퍼런스는 setup 대조·검증 후 채택, 수치 이식 금지.
+- 동결 프로토콜(코호트·fold·평가·anchor 게이트)은 재검토 없이 변경 금지.
+- 블록/세션 종료마다 문서 갱신; "md 업데이트" 요청 시 **CLAUDE.md +
+  AGENTS.md + PROJECT_MEMORY.md 동시 동기화**.
 
----
+## Claude 전용 규칙
 
-<!-- ===== WORKING AGREEMENT — task-agnostic, keep across projects ===== -->
+- 서브에이전트 위임: 가벼운 읽기/조사는 opus, 높은 수준의 추론·설계·종합은
+  fable(메인). opus 산출물은 fable이 재검토 후 채택.
+- 코드 수정 시 karpathy-guidelines 스킬 로드.
+- 자동 memory(`~/.claude/projects/...`)는 PROJECT_MEMORY.md와 내용 동기
+  유지 — 둘 중 하나만 갱신하지 말 것.
 
-## Communication
+## 커뮤니케이션·코딩·git·문서 (상세: PROJECT_MEMORY.md 1·7절)
 
-- Respond in Korean by default.
-- Prefer an option matrix (A / B / C) with an explicit recommendation over an
-  open-ended explanation. Lead with the recommended choice.
-- State assumptions up front. Explain intent and confirm before large or
-  hard-to-reverse changes; approval in one context does not extend to the next.
-- Report outcomes faithfully: if tests fail, say so with the output; if a step
-  was skipped, say so. State verified results plainly without hedging.
-- Environment: Windows 11 / PowerShell. Python via uv (`~/.local/bin/uv.exe`),
-  project venv at `.venv/`.
-
-## Coding conventions
-
-- Follow the [karpathy guidelines](https://x.com/karpathy/status/2015883857489522876):
-  surface assumptions → minimal code → surgical (touch only what's needed) →
-  define and verify success criteria before declaring done.
-- Prefer a generalizable algorithm over ad-hoc, one-off rules.
-- Match the surrounding code's idiom, naming, and comment density.
-- Python: `from __future__ import annotations` + type hints; `@dataclass(frozen=True)`
-  where it fits; snake_case; one-to-two-line function docstrings.
-- OS-independent paths via `Path(__file__).parent` — relative, never hardcoded.
-
-## Git
-
-- The user runs commit/push/pull themselves. Claude touches git state only on
-  an explicit per-instance request (keeping .gitignore safe stays Claude's job).
-- Do NOT add a `Co-Authored-By: Claude ...` line to commit messages.
-- If asked to commit on the default branch, branch first.
-- Before any risky git operation (merge, rebase, pull, reset):
-  1. Commit current work first as a rollback checkpoint.
-  2. Name the specific files that will conflict.
-  3. Use branch-based / `--no-ff` workflows. Never run destructive flags
-     (`reset --hard`, `pull -X theirs`, force-push) without explicit
-     per-instance approval.
-
-## Documentation
-
-- Write decision memos, not reference manuals: state each principle once and
-  link to the canonical source (code / commit / config) for the details.
-  Ask "manual or memo?" → choose memo.
-- Source-based — verify directly. Mark fact vs. inference explicitly.
-- Formal register, no emoji. Keep docs compact; preserve version/decision
-  history (e.g. v2 → v3 → v4) rather than overwriting it.
-- One entry-point file (this one). Keep per-file roles distinct and avoid
-  duplicating across docs; cross-check shared numbers stay consistent.
-- Update the entry point and progress doc at the end of each stage/session.
+- 한국어 기본. 옵션 매트릭스(A/B/C) + 명시적 권장을 앞에. 가정 선명시.
+  대형·비가역 변경은 의도 설명 후 확인 (승인은 맥락 간 이월되지 않음).
+  결과는 정직 보고 (실패한 테스트·스킵한 단계 포함).
+- 코딩: karpathy 원칙 (가정 표면화 → 최소 → 외과적 → 성공 기준 검증);
+  주변 코드의 관용구·주석 밀도 따르기; Python 컨벤션은 PROJECT_MEMORY.md.
+- git: 사용자 직접 수행. 에이전트는 명시 요청 시에만 + .gitignore 안전
+  유지. Co-Authored-By 금지. 파괴적 플래그는 개별 승인 없이 금지.
+- 문서: 결정 메모 스타일, 이력 보존(정정은 덧붙임), 이모지 금지, 진입점은
+  이 파일 하나 — 파일별 역할 중복 금지, 공유 수치 교차 일치 확인.
+- 환경: Windows 11 / PowerShell, uv(`~/.local/bin/uv.exe`), `.venv/`.

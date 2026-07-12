@@ -403,6 +403,90 @@ H=365 탐색, within-pitcher 고정효과, Dillon식 최종 등판 이상탐지.
 - **개선 캠페인 종료 판단**: 현 데이터 계층의 레버 소진. 다음은 KBO 이전
   패키지 (방법론+파이프라인+진단, 계수 재적합 전제).
 
+### 2026-07-13 — codex 외부 감사 수용, 계획 수정 (A0 교정 + A1 불펜 대기)
+- codex 감사의 검증 가능 주장 6건을 fable이 전부 재계산으로 확인
+  (`results/phase3/scripts/v_codex.py`) → **전부 사실**. 핵심 수용:
+  ① 2025 포함은 E0A 라벨 신뢰 종료(2024-12-31) **위반 — 내 오류** (시트
+  최신 날짜 ≠ 수집 완결성). 2022-25 헤드라인 철회, **정정 canonical =
+  t+H≤2024-12-31, H90 0.701 [0.643,0.759] / H150 0.696 [0.645,0.746]**,
+  "조건부 backtest" 표기. 2025 창 = 동결 모델의 향후 전향 확인 세트(라벨
+  성숙 ~2027 중반). ② hazard "이중계상 제거·확률 보정" 과장 철회 (양성
+  구간 252 vs distinct 79, EPV ~7.9; slope ~1.9 → validation 재보정 필요)
+  ③ 무작위 lift 2-3× → **1.55-1.76×** (MC 2000회, 유의 P≤0.012)
+  ④ "불펜 구조적 불가" → **경보 배분 문제로 재규정** (RP-내 ROC 0.65,
+  top-50 RP 포착 1건) ⑤ seen 0.71 / **novel 0.66** → KBO 기대치는 novel
+  기준 ⑥ 회고 F1@0.5는 임의 작동점 — 인용 금지.
+- **수정 계획 (codex A안 채택)**:
+  - **A0 평가 교정** — 완료: reliable_end 규칙·정정 수치·calibration 실측·
+    MC lift·role/novel subgroup·문서 정정. **잔여**: (i) nested
+    rolling-origin으로 선택 낙관 추정(등록된 선택 규칙 자동화 범위)
+    (ii) validation-only 재보정 파이프라인 (iii) hazard 사건-가중/cluster
+    민감도 (iv) 이후 **모델 완전 동결**.
+  - **A1 불펜 mini-block** (사용자 승인 대기): GS 기반 역할 재정의(raw에서
+    선발 식별 계산), RP 시간척도 feature 소수(2/3/7/14/28일·연투·back-to-
+    back), Cohen 2022 release-side slope×RP 1회 사전 등록, 경보 quota는
+    validation 선택 Pareto. Moore 2026 torque 모델은 코드 확보 gate.
+  - **KBO 이전**: 이전 대상 = 정의·계산법·검열/보정 절차·role-aware 평가·
+    경보 정책 (계수 재적합). 기대치 novel ~0.66. 데이터 계약 최소 목록
+    (TrackMan raw+메타, 실제 역할/로스터, 숨은 투구량, UCL 진단·수술 상세,
+    prior TJS, 연결 ID). TJS/UCL primary 유지, arm IL은 (라벨 아닌)
+    auxiliary feature로만 검토 — 사용자 확인 필요.
+
+### 2026-07-13 (계속) — A0·A1 사용자 승인, 사전 등록 실행 사양
+- **사용자 승인**: A0 잔여 + A1 불펜 mini-block 모두 권장안대로 진행.
+  **arm-IL feature는 설명 제공됨** (요지: 라벨 불변, 팔꿈치 IL "이력"을
+  입력으로 — prior_tjs 계열; MLB는 새 데이터 소스 필요라 A1 범위 밖,
+  결정은 KBO 설계 시점) — **사용자 결정 대기**.
+- **A0 잔여 사양 (사전 등록; 순서대로, canonical 수치는 불변·보고만)**:
+  1. nested rolling-origin: fold Y∈{2022,2023,2024}(t+H≤2024-12-31 유지),
+     fit=year<Y에서 등록된 선택 경로(M-role/M_bf/M_sa 중 paired 점추정
+     최선 선택 + hazard 비열등 채택)를 자동 재실행 → fold-내 선택 성능
+     vs 고정 M_sa+hazard 성능 차 = 선택 낙관 추정치.
+  2. validation 재보정: fit set 내 5-fold out-of-fold 예측으로 로지스틱
+     재보정(slope/intercept) 적합(valid 2021 단독은 사건 15개라 CV 사용)
+     → test에 적용, calibration-in-the-large/slope/Brier/reliability 보고.
+  3. hazard 민감도: (i) 사건-가중(양성 구간 가중 1/landmark 수) (ii) s
+     범주형 baseline — paired 점추정 비교.
+  4. **동결**: 위 완료 후 `results/phase3/FROZEN_MODEL.md`에 스펙+계수
+     고정 기록, "2025-26 라벨 성숙(~2027 중반) 시 1회 전향 확인" 명시.
+     이후 MLB 쪽 모델 변경 금지.
+- **A1 불펜 mini-block 사양 (H150 primary, H90 secondary)**:
+  1. 역할 재정의: raw에서 game_pk별 팀 첫 투수=GS 계산 → 5분류
+     (starter / opener·bulk / swing / short RP / long RP; 규칙은 실행 시
+     문서화, start_share 프록시와 대조).
+  2. RP 시간척도 feature 소수(≤6): 2/7/14일 투구수·등판수, back-to-back·
+     3-in-4 횟수, 직전 등판 투구수의 개인 baseline 대비 급증.
+  3. Cohen 2022 검정 1회: handedness-정규화 release_pos_x의 1-3년 기울기
+     × RP 상호작용 (회고 case-control 출처 — 널이면 즉시 종료).
+  4. 모델: pooled vs role-interaction vs SP/RP 분리(shrinkage) 비교.
+  5. 경보 quota: validation에서 SP/RP 배분 선택 → test 1회. **채택 기준 =
+     같은 총 예산(50)에서 RP 포착 증가 AND 전체 recall 손실 ≤ 사전
+     허용치(2건) Pareto 개선** (RP ROC 단독 아님). Moore 2026 torque는
+     코드 확보 전 제외.
+- 실행은 compact 후 세션에서 이 사양대로 기계적으로 진행 (재설계 금지).
+
+### 2026-07-13 (계속 2) — arm-IL feature MLB 실험 승인 (A-IL 블록), 동결 순서 조정
+- **사용자 승인**: arm-IL 이력 feature를 KBO 대기가 아니라 **MLB에서도
+  검정** (데이터 소스 확보 어렵지 않다고 판단). 실행은 compact 후 사용자
+  "시작" 지시 대기.
+- **순서 조정 (논리적 필연)**: 모델 동결(구 A0-4)은 A0-3 직후가 아니라
+  **모든 승인 블록 종료 후**로 이동. 확정 순서:
+  **A0(1-3: rolling-origin 낙관·OOF 재보정·hazard 민감도) → A1(불펜) →
+  A-IL(arm-IL feature) → 동결(FROZEN_MODEL.md)**.
+- **A-IL 블록 사전 등록 사양**:
+  1. 데이터: MLB StatsAPI transactions 엔드포인트(무료)에서 2016-2024 IL
+     트랜잭션 수집, 텍스트에서 팔꿈치/전완 키워드(elbow, forearm, UCL 등
+     — 키워드 셋은 수집 시 문서화) 파싱. 파싱 규칙·커버리지 감사 필수
+     (연도별 IL 건수 sanity check).
+  2. feature (as-of t, 엄격히 t 이전, ≤3개): 최근 2년 팔꿈치-IL 등재 수,
+     마지막 팔꿈치-IL 경과일(log/cap), 최근 2년 임의-IL 등재 수(대조용).
+  3. 검정: 당시 baseline(M_sa 또는 A1 채택분) 위 additive paired, 성숙
+     test(t+H≤2024-12-31), EXCL0 시 rolling-origin. **신규 정보 분해
+     필수**(B'식): 팔꿈치-IL은 구단이 이미 아는 정보이므로, 포착 사건 중
+     "IL 이력 없이 잡힌 것"의 비율을 병기해 조기경보 가치를 분리.
+  4. 주의: 수술 직전 팔꿈치-IL은 사실상 진단 공개 — lead 분포를 반드시
+     보고 (near-t IL 의존 포착과 순수 조기 포착 구분).
+
 ### 2026-07-08 — 계획 v3 승인, R 블록 완료 (R3 GPU 재실행 진행 중)
 - **R1 rolling-origin: 기준 (a)(b) 모두 PASS.** 전 12 cell(모델×연도×H)
   ROC>0.55(최저 0.572), M-role의 dPR·dROC 점추정 6/6 fold 양(+). 2023
