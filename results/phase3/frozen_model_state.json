@@ -1,0 +1,61 @@
+{
+ "frozen_at": "2026-07-13 (Asia/Seoul), codex-3rd-audit remediation dump",
+ "model": "M_sa 9f + discrete-time hazard (plain LR, s=0..4), fit train 2017-20 + valid 2021 (cohort_v4)",
+ "features": [
+  "pc_chronic",
+  "pc_acute_dev",
+  "days_since_last",
+  "vel_trend",
+  "month",
+  "start_share",
+  "prior_pc_rate",
+  "ncg_log",
+  "vt_missing",
+  "s"
+ ],
+ "scaler_mean": [
+  3.3913740709939284,
+  0.8034118780774319,
+  95.91982891766662,
+  -0.22679498268594125,
+  6.570512058928359,
+  0.31350496150500823,
+  5.690833409616607,
+  4.296018484073689,
+  0.4342877509801592,
+  1.9935368896281336
+ ],
+ "scaler_scale": [
+  4.456661214804647,
+  2.776353088503138,
+  119.25734386961294,
+  1.1946246606187523,
+  1.7049432666440572,
+  0.41960285595173724,
+  4.713476595633538,
+  0.6788129475141448,
+  0.495663091553982,
+  1.4143920040831455
+ ],
+ "lr_intercept": -5.900479840252754,
+ "lr_coef": [
+  -0.21438471933850214,
+  -0.08397891576220612,
+  -0.15366791033160468,
+  -0.011728143075135042,
+  -0.23349741245657207,
+  0.11083322163931864,
+  0.13316970941186712,
+  -0.0856160340356241,
+  -0.010479485685535894,
+  -0.19699870068591147
+ ],
+ "recal_interval_logistic": {
+  "a": -0.16402965075218998,
+  "b": 0.9664705368063654,
+  "note": "grouped-OOF interval-level; window-level P(H) NOT thereby calibrated"
+ },
+ "alert_policy": "canonical = plain top-50 by P150 (q=0); q=20 RP-reserve is a challenger only (passed primary boundary, FAILED safety-H150 gate: 16->12)",
+ "sklearn": "1.9.0",
+ "python": "3.11.11"
+}

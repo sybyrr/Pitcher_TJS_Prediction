@@ -31,18 +31,21 @@ MLB 투수의 Tommy John Surgery 위험을 경기 데이터로 예측한 Kang et
 - **Phase 2/2.5/2.6 [완료]**: 논문 수치 해체(회귀=개인 내 보간, 분류 ~0.11
   이력길이 아티팩트; 정직 회고 ~0.60) → 전향 재설계(월별 결정일, TJS-only,
   미래 시즌 test)에서 workload LR ROC 0.64 → `phase2_results.md`.
-- **Phase 3 [주 개선 캠페인 종료, 최종 검증 블록 대기]**: R(역할 채택·회고 정정) → B/B'(트래킹 증분 널,
-  tree 널, 콘텐츠-only ~0.5, 경보의 60%가 사용량 정상 시점) → P(진단 →
-  M_sa 채택 → hazard supermodel canonical → 2024 확장) → **codex 외부
-  감사 수용(2026-07-13)**: 2025 라벨 미완결로 2022-25 수치 철회, 정정
-  canonical = **H90 0.701 / H150 0.696 (조건부 backtest, 사건 75/80)**.
-  상세·정정 전문: `results/phase3/P_BLOCK_RESULTS.md`.
-- **승인됨(2026-07-13, 사양 v2 = plan_progress.md "2026-07-13 (계속 3)"
-  절 — codex 2차 감사 반영·fable 수치 검증 완료)**: **A0(1-3) → A1 불펜
-  → A-IL(팔꿈치-IL 이력 feature, MLB) → 동결** 순서로 기계적 실행.
-  라벨은 TJS-only 불변(IL은 feature만). primary 0.701/0.696은 safety
-  경계 0.660/0.665와 항상 병기; KBO 기대치는 novel 대역 ~0.56–0.68.
-- **대기**: 사용자 "시작" 지시; 제안서(사용자 직접 작성).
+- **Phase 3 [완료·동결(2026-07-13)]**: R → B/B' → P(M_sa+hazard
+  canonical) → codex 감사 3회 수용 → 사양 v2로 **A0 → A1 → A-IL →
+  동결** 완료. canonical = **H90 0.701 / H150 0.696 (조건부 backtest;
+  safety 0.660/0.665 병기, ~0.60-0.70은 sensitivity envelope 표기)**.
+  경보 canonical = **q=0 top-50** (q=20 RP 예약은 safety H150 게이트
+  실패로 challenger 강등). A-IL 미채택(triage 재검정 후보). **동결
+  정본: `results/phase3/FROZEN_MODEL.md` + `frozen_model_state.json`
+  (SHA-256 기록)**. 이후 MLB 모델 변경 금지.
+- **2026 채점(다운로드 승인, 3/1-7/12 스냅샷)**: 4-7월 결정일 채점은
+  **label-blind delayed shadow backfill** (진짜 전향 아님 — codex 3차
+  재분류). **첫 진짜 전향 = 2026-08-01을 당일 이전 채점·해시·저장**
+  (frozen state 로드, append-only, 사용자 git commit으로 증빙).
+- **대기**: 제안서(사용자 직접 작성 — 재료: phase2_results 블록 6-9 +
+  FROZEN_MODEL.md + `PROJECT_RETROSPECTIVE.md`); KBO 이전 패키지(계수·
+  quota 재적합 전제); 2026-08-01 사전 채점(8/1 전 실행 필요).
 
 ## Key files
 
@@ -56,6 +59,7 @@ Kang_2025_TJS_Prediction.md   # 원 논문 layout-aware 전사본 (수치 기준
 kang_repo_audit.md            # upstream 코드 감사 + 환경 기록 (함정 목록)
 reproduction_and_dataset.md   # 재현 검토 + 데이터셋 정의 (라벨 신뢰: E0A)
 KBO_applicability.md          # KBO 이전 전략 검토
+PROJECT_RETROSPECTIVE.md      # 회고 (숫자의 여정, 통한 것/안 통한 것)
 src/download_statcast.py      # Statcast 다운로드 (2016-2025) → data/raw/
 src/extract.py                # final_df 재구축 (upstream 1:1 + 마커)
 src/run_phase2.py             # Phase 2 변형 러너 (VARIANTS 레지스트리)

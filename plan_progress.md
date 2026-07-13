@@ -662,3 +662,92 @@ H=365 탐색, within-pitcher 고정효과, Dillon식 최종 등판 이상탐지.
   시점부터가 진짜 전향 평가의 시작. 2025 창은 label-refresh robustness
   set으로만 사용(이미 조회되어 untouched 아님).
 - 상태: **사양 v2 사전 등록 완료. 실행은 사용자 "시작" 지시 대기.**
+
+### 2026-07-13 (실행) — 사용자 "시작" 지시, A0·A1 완료
+
+- **A0 완료 (보고 전용, canonical 불변)** — `results/phase3/A0_RESULTS.md`:
+  - A0-1 nested 3-후보 감사: fold별 선택 불안정(M-role→M_sa→M_bf), 3-fold
+    평균 낙관 **−0.013**(체계적 낙관 없음, 연도 노이즈 ±0.07 지배), 고정
+    M_sa+hazard가 전 fold에서 fold별 선택보다 우수. 하한으로만 인용.
+  - A0-2 재보정: grouped-OOF 재보정 계수 **a −0.164 / b 0.967 ≈ 항등** —
+    test slope ~1.9의 원인은 과적합이 아니라 **2017-21→2022-24 유병률
+    shift**로 fit-set 재보정으로 교정 불가. 절대 확률 = 배치 시점 재보정
+    필수 규칙 유지. joint hazard 재보정은 P90≤P150 위반 0.
+  - A0-3 민감도: s 범주형 ±0.000 / 사건 가중 −0.028 / 수술당 단일
+    landmark **−0.104**(반복 landmark 구조가 성능의 실질 일부) /
+    fit-side full-refit bootstrap CI **[0.597, 0.702] / [0.600, 0.700]**
+    (mean 0.668/0.664) — "실질 대역 ~0.60-0.70" 표기 재확인.
+- **A1 완료** — `results/phase3/A1_BULLPEN.md` + gs_flags_v1.parquet:
+  - GS 빌드 sanity 통과(연 4,860, 2020 1,796). 3분류: test RP 7,888 /
+    SP 3,646 / swing 551; opener·bulk 전담 0건(서술 5분류).
+  - **모델 변형 전부 널** (H150 primary: pooled −0.001 / interaction
+    −0.010 / 분리 +0.000 / Cohen relx-drift −0.008, 전부 CI 0 포함) →
+    feature/모델 경로 종료. Cohen은 사전 등록대로 널 즉시 종료.
+  - **quota 채택**: 안정 영역 q\*=20 → mature test에서 RP 사건 포착
+    **0→5** (양 H), 총 recall 손실 정확히 2건(21→19, 24→22) — 게이트
+    (RP↑ & 손실 ≤2) 통과. 운영 정책 "top-50 중 RP 상위 20석 예약"을
+    동결 대상에 포함. 정책 Pareto로만 인용(모델 ROC 개선 아님).
+- **A-IL 완료 — canonical 미채택 (blackout 게이트 실패)** —
+  `results/phase3/AIL_RESULTS.md`:
+  - 수집·파싱 게이트 통과: episode 6,692 (팔꿈치 1,033), 연도별 sanity
+    정상, 무작위 40건 수동 검수 정밀도 40/40 (한계: "flexor" 미포함 —
+    동결 셋 유지). 정보시점 = transaction date, episode 병합 적용.
+  - 전체 feature는 dROC +0.068/+0.046 EXCL0 (recall@50 24→44)로 극적
+    개선이지만, **blackout 60d에서 −0.006/−0.003 (승격 기준 실패)**,
+    lead 중앙값 34일(P25 13일), 이력 없는 포착 사건 0% — 신호의 실체는
+    공개 진단의 메아리. **사전 등록대로 "공개 진단 후 triage 신호"로
+    분류, canonical 제외.** 조기경보 서사는 경기 데이터 모델(B'의
+    lead 72일)에만 남는다.
+- **동결 완료** — `results/phase3/FROZEN_MODEL.md`: M_sa+hazard 계수·
+  scaler·재보정(a −0.164, b 0.966) 고정, 경보 정책(top-50, RP 예약
+  20석, 순위 P150) 포함. **2025 점수 timestamp 아카이브**
+  `frozen_scores_2025_ts20260713.csv` (3,994 창, md5 a3304...) — 라벨
+  성숙 시 이 파일로만 robustness 평가(재채점 금지). 이후 MLB 모델 변경
+  금지; 남은 트랙 = KBO 이전(계수 재적합) + 제안서(사용자) + triage
+  별도 계층.
+
+### 2026-07-13 (계속 4) — 2026 다운로드 승인, 진짜 전향 채점 시작, 회고 문서
+
+- **사용자 승인으로 2026 Statcast 부분 시즌 다운로드** (3/1-7/12 스냅샷,
+  459,341구; src/download_statcast.py에 END_OVERRIDE 추가).
+- **진짜 전향 채점 1회차 완료**: 결정일 2026-04/05/06/07, 2,654 창,
+  동결 계수·재보정 재현 assert 통과 후 채점(재적합 없음) →
+  `results/phase3/prospective_scores_2026_ts20260713.csv`
+  (md5 1f7648ef...). 8/9월 채점은 월 데이터 갱신 후 동일 스크립트
+  (`score_2026_prospective.py`)로 grid만 확장.
+- **회고 문서 작성**: `PROJECT_RETROSPECTIVE.md` (사용자 시점 —
+  숫자의 여정, 통한 것 9가지, 안 통한 것 6가지, KBO로 가져갈 것).
+- 남은 것: 제안서(사용자, 재료 완비) / KBO 이전 패키지 / 2026-08·09
+  채점(데이터 갱신 시) / 2025 robustness 평가(~2027 중반).
+
+### 2026-07-13 (계속 5) — codex 3차 감사 수용 (fable 재계산 검증 후 전면 반영)
+
+- **검증**: ① quota safety 재계산 — codex 표와 완전 일치 (safety H150
+  q=0 16 → q=20 12, 손실 4 > 허용 2; q=5는 전 셀 +1이지만 사후 관찰).
+  ② A-IL parser 소급 — 정확히 33/1,033 episode (최대 773일, 중앙값
+  33일); 공개일 기준 blackout 60d dROC = fable −0.002/+0.001 (codex
+  −0.0005/+0.0009와 구현 차이 내 동일 결론 ≈0). ③ 코드 검토로 CITL
+  명칭·window slope·one-landmark 음성행·2026 시점 논리·score 스크립트
+  재적합 방식 전부 확인. **6개 권고 전부 수용.**
+- **정정 반영**:
+  1. **q=20 채택 철회 → 조건부 challenger 강등** (canonical 경보 =
+     q=0 top-50). 기존 점수 파일의 alert_q20 열은 challenger 기록으로
+     보존, q=5 소급 채택 금지. → A1_BULLPEN.md 정정 헤더 +
+     FROZEN_MODEL.md 4절.
+  2. **2026년 4-7월 채점 재분류 = label-blind delayed shadow backfill**
+     (결정일이 채점일보다 과거 + 2026 라벨 일부가 시트에 존재). **첫
+     진짜 전향 cohort = 2026-08-01을 당일 이전 채점·해시·저장할 때.**
+  3. A0 표현 정정: "체계적 낙관 없음"·수치적 "하한" 삭제(3 fold 변동
+     ±0.07), citl = mean-pred − prevalence로 명칭 정정, 구간 항등 ≠
+     window 보정(slope 0.24/0.55), slope 1.9 원인 단정 불가,
+     one_landmark = outcome-dependent stress test. → A0_RESULTS.md.
+  4. A-IL parser 한계 명시 + 공개일 기준 정정 blackout ≈0 (**미채택
+     결론 불변**), "triage 후보(재검정 필요)"로 강등. → AIL_RESULTS.md.
+  5. "~0.60-0.70" = sensitivity envelope (공식 CI 아님);
+     "KBO 기대 0.56-0.68" → **MLB novel-pitcher stress reference**
+     (KBO 성능 예측 아님). → FROZEN_MODEL.md 5절, 회고 문서.
+  6. **동결 무결성 보강**: `frozen_model_state.json` (full-precision
+     정본, SHA-256 e14ba800...) 생성; 점수 파일 SHA-256 기록 (2025
+     ca7c4e73..., 2026 ab7e8b87...); 향후 채점은 상태 로드 방식 +
+     append-only + 사용자 git commit/tag 권고.
+- 회고 문서도 동일 정정 반영 (quota·감사 3회·envelope·stress reference).

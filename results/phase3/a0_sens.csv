@@ -1,0 +1,7 @@
+variant,H90,H150,d90,d150,note
+canonical,0.7009,0.6958,0.0,0.0,
+event_weighted,0.6725,0.6696,-0.0284,-0.0262,"pos rows 252, distinct fit surgeries 79"
+categorical_s,0.7008,0.6958,-0.0,-0.0,
+one_landmark_per_surgery,0.5965,0.5923,-0.1044,-0.1036,dropped 173 of 252 pos rows
+refit_boot_H90,,,,,"mean 0.6682 CI [0.5971,0.7015] B=200"
+refit_boot_H150,,,,,"mean 0.6642 CI [0.5999,0.7002] B=200"
