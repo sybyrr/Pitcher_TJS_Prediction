@@ -42,12 +42,14 @@ MLB 투수의 Tommy John Surgery 위험을 경기 데이터로 예측한 Kang et
   (SHA-256 기록)**. 이후 MLB 모델 변경 금지.
 - **2026 채점(다운로드 승인, 3/1-7/12 스냅샷)**: 4-7월 결정일 채점은
   **label-blind delayed shadow backfill** (진짜 전향 아님 — codex 3차
-  재분류). **첫 진짜 전향 = 2026-08-01을 당일 이전 채점·해시·저장**
-  (frozen state 로드, append-only, 사용자 git commit으로 증빙).
+  재분류). **첫 진짜 전향 = 2026-08-01을 당일 또는 이전에 채점·해시·
+  저장** (frozen state 로드, append-only, 사용자 git commit으로 증빙).
 - **대기**: 제안서(사용자 직접 작성 — 재료: phase2_results 블록 6-9 +
-  FROZEN_MODEL.md + `progress_MLB.md`); KBO 이전 패키지(계수·quota
-  재적합 전제); **2026-08-01 사전 채점(8/1 전 실행 필요)**; 봉인 파일
-  git 커밋(사용자); D0 source commit/push 뒤 owner-only Sites publish.
+  FROZEN_MODEL.md + `progress_MLB.md`); KBO 다음 후보 = Codex 수행
+  label-blind 소규모 source/schema pilot(별도 승인 필요); **2026-08-01
+  채점(당일 또는 이전, 8/1 직전 raw 갱신 후 M2 CLI)**; 봉인 파일
+  git 커밋 + data.zip 공유(사용자); D0 source commit/push 뒤 owner-only
+  Sites publish.
 - **M1/M2 [완료·교차감사 PASS]**: A0/A1/A-IL corrected 코드·CSV/parquet를
   독립 재실행까지 일치시켰다. actual first-pitch GS 22,764/22,764 경기
   정확히 2, q20 safety H150 실패로 q0 유지. M2 fit/label-free state loader,

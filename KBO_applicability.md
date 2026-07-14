@@ -131,6 +131,17 @@ KBO 적용의 순서는 **(1) MLB에서 모델·feature 중요도 확립 → (2)
 성능 검증의 병목은 완전한 TJS/UCLR 시행 라벨과 follow-up"**이다. 상세
 실행 게이트는 `plan_progress.md`의 "2026-07-13 (계속 7)"이 우선한다.
 
+**K0 실행 결과 (2026-07-14, 정본 = `results/kbo/K0_FEASIBILITY.md`)**:
+판정 `PARTIAL`, K1 자동수집 `NO-GO`. 공식 boxscore에 gameId·경기일·
+선발/구원·투구수는 존재하나 1군 다년 coverage·ID 연속성·risk-set replay
+미확인, 공식 export/API·연구 bulk 허가 부재(약관 사전승낙 범위), 공개
+structured daily velocity 부재로 V9 공개 경로 FAIL. **후속 사용자
+결정**: 과거 KBO 홈페이지 수집 경험 + 네이버 문자중계 PTS 구속 경로
+제시, 수집 주체는 Codex. 다음 후보 = label-blind 소규모 source/schema/
+coverage pilot (KBO 공식 투구수 = B7 정본, PTS 구속 = 별도 `V9-PTS`
+후보; 별도 승인 후 착수). PU 원칙(`unknown != negative`, 공개 자료
+재적합·ROC 금지)은 불변 — plan_progress "2026-07-14 (계속 2)".
+
 ---
 
 ## 2026-07-14 K0 실행 판정 — v2 gate 적용 결과

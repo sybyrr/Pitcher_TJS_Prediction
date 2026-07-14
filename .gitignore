@@ -25,6 +25,7 @@ __pycache__/
 # Root research data. Keep this rule anchored so dashboard/public/data remains
 # versioned with the dashboard source.
 /data/
+/data.zip
 
 # Large or regeneratable binary artifacts outside /data
 *.pth

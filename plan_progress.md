@@ -1173,3 +1173,47 @@ K0 이후 사용자가 과거 KBO 홈페이지 수집 경험과 네이버 문자
 
 현재 변경은 사용자가 직접 commit/push해야 한다. dashboard의 새 추적 파일
 두 개(`demo_test_top20.csv`, `manifest.json`)가 해당 commit에 포함돼야 한다.
+
+### 2026-07-14 (계속 3) — 팀 공유용 데이터 ZIP 생성
+
+사용자 지시에 따라 원본을 수정하지 않고 프로젝트 루트에
+`Pitcher_TJS_data_raw_prospective_20260714.zip`을 생성했다. ZIP 내부의
+최상위 경로는 `data/raw/`와 `data/prospective/`로 유지했으며,
+`data/prospective/windows.npz`만 제외했다. 구성은 raw 11개 + prospective
+13개 = 총 24개 파일이다.
+
+검증 결과 원본 대비 누락/추가 경로 0건, 예기치 않은 최상위 경로 0건,
+`windows.npz` 0건이었다. 모든 ZIP entry stream을 끝까지 읽은 바이트 합계
+1,044,281,611 bytes가 포함 원본 합계와 일치했다. ZIP 크기는 947,880,198
+bytes이고 SHA-256은
+`8877C390EE2C3E973D6EA155B080B700971E183FC21AE2117BAB0A318AECAA2F`다.
+대용량 전달물이 Git에 실수로 포함되지 않도록 루트 `.gitignore`에
+`/Pitcher_TJS_data_*.zip` 패턴을 추가했다.
+
+**정정 (2026-07-14)**: 사용자가 원하는 전달 형식을 다시 확인해 위 ZIP은
+제거하고 프로젝트 루트의 `data.zip`으로 교체했다. 새 ZIP 내부 최상위는
+`raw/`와 `prospective/`이며 `data/` 접두사는 없다. 따라서 일반적인
+“`data` 폴더에 압축 풀기” 방식으로 저장소의 `data/raw/`와
+`data/prospective/` 구조를 바로 복원할 수 있다. 파일 수와 비압축 바이트는
+위와 동일하고, 새 ZIP 크기는 947,879,938 bytes, SHA-256은
+`370064101442AF977F5C01AF3FE29CBF9BECA9022B9B12F3451D8CD372F0165D`다.
+원본 대비 누락/추가 경로 및 예기치 않은 최상위 경로는 모두 0건이고,
+`windows.npz`도 0건임을 전체 entry stream 읽기로 확인했다. Git 제외
+패턴도 `/data.zip`으로 교체했다.
+
+### 2026-07-14 (계속 4) — compact 대비 문서·memory 전수 점검 (fable)
+
+- 정본 4종(CLAUDE.md·AGENTS.md·PROJECT_MEMORY.md·plan_progress)은 7/14
+  상태로 상호 정합 확인. 낡은 표현만 정정: ① 시점 문구를 동결 정본
+  "2026-08-01 **당일 또는 이전**"으로 통일 (CLAUDE.md 대기 절 —
+  KBO 다음 후보/데이터 ZIP 반영 포함, progress_MLB 2곳) ② PROJECT_MEMORY
+  4절 A-IL 기각 근거를 M1 corrected 기준(+0.006/+0.002 CI 0 포함 +
+  parser 보수로 confirmatory 상실)으로 정정 ("60d 음수" 구표현 제거)
+  ③ progress_MLB에 "9. 부록 — 2026-07-14 갱신" 신설(교차감사·M2
+  fit-free 채점기·D0·K0 판정, 일반 독자용) + 5절 감사 횟수 각주
+  ④ KBO_applicability v2 절에 K0 판정·후속 사용자 결정(네이버 PTS,
+  Codex 수집, label-blind pilot 후보) 포인터 추가.
+- 자동 memory 동기화: phase3-plan-v3-guardrails(7/14 실행 결과 전체 +
+  KBO v2를 K0 반영 상태로 갱신), MEMORY.md 인덱스 hook,
+  tjs-label-teammate-track(A-IL 최종 결과 각주). 코드·데이터·실험 실행
+  없음, git은 사용자 커밋 대기(수정 6파일).

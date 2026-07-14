@@ -102,9 +102,10 @@
   감쇠(널), M_bf 백필(rolling 비일관), **A1 RP 시간척도 feature 6종
   (pooled/interaction/분리 전부 널, H150 점추정 ≤0)**, **Cohen 2022
   release-drift×RP (사전 등록 1회 검정 널 — 회고→전향 이전 실패 추가
-  사례)**, **A-IL 팔꿈치-IL 이력 (전체 +0.068/+0.046 EXCL0이지만
-  blackout 60d에서 음수 — 공개 진단 메아리, "triage 재검정 후보"로만
-  분류, canonical 금지; parser 한계로 검증된 triage는 아님)**.
+  사례)**, **A-IL 팔꿈치-IL 이력 (corrected 전체 +0.069/+0.045 EXCL0이지만
+  blackout 60d는 +0.006/+0.002로 CI 0 포함 + 결과 확인 후 parser 보수로
+  confirmatory 상실 — 공개 진단 메아리 성격, "triage 재검정 후보"로만
+  분류, canonical 금지; 2026-07-14 M1 정정 근거)**.
 - **열린 후보**: prior_tjs(3개 test 구성 연속 방향 양 + recall 개선, CI 0
   포함 — 사건 축적/KBO에서 1순위 재검정), arm angle 드리프트(2020+만
   존재, train 커버리지 부족 — 시즌 축적 대기), A2 PITCHf/x train
