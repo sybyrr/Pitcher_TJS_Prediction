@@ -1,0 +1,7 @@
+year,game_pk,game_date,inning_topbot,at_bat_number,legacy_extra_gs_pitcher,corrected_gs_pitcher,corrected_first_pitch_number,issue
+2016,448247,2016-07-17,Top,1,592811,448179,1,v1_mid_at_bat_false_GS
+2018,530083,2018-05-19,Bot,6,518397,448179,1,v1_mid_at_bat_false_GS
+2018,531728,2018-09-23,Bot,4,605541,502171,1,v1_mid_at_bat_false_GS
+2022,662479,2022-05-22,Bot,6,667373,571927,1,v1_mid_at_bat_false_GS
+2024,745007,2024-06-05,Bot,4,666214,628317,1,v1_mid_at_bat_false_GS
+2024,746755,2024-08-27,Top,1,623167,676979,1,v1_mid_at_bat_false_GS

@@ -1,253 +1,637 @@
-"""A-IL step 3: elbow-IL history features, additive test + blackout (spec v2).
+"""A-IL audit repair: evaluate disclosure-time IL features and alert lead.
 
-Features (as-of t, strictly before, episode START = transaction date):
-  elbow2y  = # new-elbow episodes in [t-730d, t)
-  dsle_log = log1p(min(days since last new-elbow episode, 1500)); none -> cap
-  anyil2y  = # all IL episodes in [t-730d, t)  (contrast)
-Variant M_il = M_sa + 3, binary LR frozen protocol, paired vs M_sa on the
-mature test (t+H<=2024-12-31), shared resamples seed 0. If EXCL0 -> rolling.
-Blackout {30,60,90}d: episodes starting in [t-X, t) removed from all three
-features (dsle falls back to the previous episode). Promotion rule
-(pre-registered): canonical candidate only if the 60d-blackout paired dROC
-point estimate stays positive on BOTH H; otherwise "disclosed-diagnosis
-triage signal" — documented, excluded from canonical.
-New-info + lead decomposition (B'-style) at top-50. Output ../ail_results.csv.
+This is a versioned correction of the legacy A-IL diagnostic.  It reads
+``il_episodes_asof_v2.parquet`` and writes new artifacts without overwriting
+the original episode or result files.
 """
 from __future__ import annotations
+
 import time
 from pathlib import Path
+from typing import Any
+
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import average_precision_score, roc_auc_score
+from sklearn.preprocessing import StandardScaler
 
-ROOT = Path("d:/PAINS/Pitcher_TJS_Prediction")
+
+ROOT = Path(__file__).resolve().parents[3]
 OUT = Path(__file__).resolve().parent.parent
-t0 = time.time()
-
-cohort = pd.read_parquet(ROOT / "data/prospective/cohort_v4.parquet").sort_values(["t", "pitcher"]).reset_index(drop=True)
-N = len(cohort)
-slim = pd.read_parquet(ROOT / "data/prospective/slim_games_v4.parquet").sort_values(["pitcher", "game_date"]).reset_index(drop=True)
-by_pid = {}
-for pid, g in slim.groupby("pitcher", sort=False):
-    by_pid[int(pid)] = (g["game_date"].values.astype("datetime64[D]"),
-                        g["pitch_count"].astype("float64").values,
-                        g["mean_release_speed"].astype("float64").values,
-                        g["game_year"].values.astype(np.int64))
-gf = pd.read_parquet(ROOT / "data/prospective/game_features_v4.parquet").sort_values(["pitcher", "game_date"]).reset_index(drop=True)
-role_by_pid = {}
-for pid, g in gf.groupby("pitcher", sort=False):
-    role_by_pid[int(pid)] = (g["game_date"].values.astype("datetime64[D]"),
-                             g["total_pitches"].astype("float64").values)
-ep = pd.read_parquet(ROOT / "data/ail/il_episodes.parquet")
-elbow_by_pid = {int(p): np.sort(g.loc[g["new_elbow"], "start"].values)
-                for p, g in ep.groupby("pid")}
-anyil_by_pid = {int(p): np.sort(g["start"].values) for p, g in ep.groupby("pid")}
+EPISODES_PATH = ROOT / "data" / "ail" / "il_episodes_asof_v2.parquet"
+RESULTS_PATH = OUT / "ail_results_asof_v2.csv"
+ALERTS_PATH = OUT / "ail_alert_events_asof_v2.csv"
 DAY = np.timedelta64(1, "D")
-
-def pw_mean(v, w, mask):
-    m = mask & ~np.isnan(v)
-    if not m.any():
-        return np.nan
-    ws = w[m].sum()
-    return float((v[m] * w[m]).sum() / ws) if ws > 0 else np.nan
-
-pid_all = cohort["pitcher"].values.astype(np.int64)
-t_all = cohort["t"].values.astype("datetime64[ns]")
-year_all = cohort["year"].values.astype(np.int64)
-month_all = cohort["month"].values.astype(np.float64)
-ncg_all = cohort["n_career_games"].values.astype(np.float64)
-
-rows = []
-prior_pc_rate = np.zeros(N); vt_missing = np.zeros(N); start_share = np.zeros(N)
-for i in range(N):
-    pid = int(pid_all[i]); t = t_all[i].astype("datetime64[D]")
-    gd, pc, sp, gy = by_pid[pid]
-    before = gd < t
-    d30 = before & (gd >= t - np.timedelta64(30, "D"))
-    d90 = before & (gd >= t - np.timedelta64(90, "D"))
-    pc_30 = pc[d30].sum(); pc_90 = pc[d90].sum()
-    dsl = float((t - gd[before].max()) / DAY)
-    vmean_30 = pw_mean(sp, pc, d30)
-    yr = int(year_all[i])
-    vmean_prior = pw_mean(sp, pc, before & (gy < yr))
-    if np.isnan(vmean_prior):
-        vmean_prior = pw_mean(sp, pc, before & (gd < t - np.timedelta64(30, "D")))
-    if np.isnan(vmean_30) or np.isnan(vmean_prior):
-        vel_trend = 0.0; vt_missing[i] = 1.0
-    else:
-        vel_trend = vmean_30 - vmean_prior
-    prior_years = gy[before & (gy < yr)]
-    if prior_years.size:
-        m_py = before & (gy == prior_years.max())
-        prior_pc_rate[i] = pc[m_py].sum() / 183.0
-    rows.append((pc_90 / 90.0, pc_30 / 30.0 - pc_90 / 90.0, dsl, vel_trend, month_all[i]))
-    rgd, rtp = role_by_pid[pid]
-    rm = (rgd < t) & (rgd >= t - np.timedelta64(365, "D"))
-    ng365 = int(rm.sum())
-    start_share[i] = float((rtp[rm] >= 50).sum()) / ng365 if ng365 > 0 else 0.0
-
-F = pd.DataFrame(rows, columns=["pc_chronic", "pc_acute_dev", "days_since_last", "vel_trend", "month"])
-F["start_share"] = start_share
-F["prior_pc_rate"] = prior_pc_rate
-F["ncg_log"] = np.log1p(ncg_all)
-F["vt_missing"] = vt_missing
-assert np.abs(F["days_since_last"].values - cohort["dsl"].values.astype(float)).max() < 1e-6
-M_SA = list(F.columns)
-print(f"[t={time.time()-t0:.0f}s] base features built")
-
 CAP = 1500.0
-def il_features(blackout_days=0):
-    """elbow2y, dsle_log, anyil2y as of t, excluding episodes starting in [t-blackout, t)."""
-    out = np.zeros((N, 3))
-    bo = np.timedelta64(blackout_days, "D")
-    for i in range(N):
-        pid = int(pid_all[i]); t = t_all[i]
-        cut = t - bo
-        es = elbow_by_pid.get(pid)
-        if es is not None:
-            e_ok = es[es < cut]
-            out[i, 0] = ((e_ok >= t - np.timedelta64(730, "D")) & (e_ok < cut)).sum()
-            if e_ok.size:
-                out[i, 1] = np.log1p(min(float((t - e_ok.max()) / DAY), CAP))
-            else:
-                out[i, 1] = np.log1p(CAP)
-        else:
-            out[i, 1] = np.log1p(CAP)
-        av = anyil_by_pid.get(pid)
-        if av is not None:
-            a_ok = av[av < cut]
-            out[i, 2] = ((a_ok >= t - np.timedelta64(730, "D")) & (a_ok < cut)).sum()
-    return out
-
 IL_COLS = ["elbow2y", "dsle_log", "anyil2y"]
-base_il = il_features(0)
-for j, c in enumerate(IL_COLS):
-    F[c] = base_il[:, j]
-cov = (F["elbow2y"] > 0).mean()
-print(f"coverage: elbow2y>0 in {cov:.2%} of windows; anyil2y>0 in {(F['anyil2y']>0).mean():.2%}")
 
-fold = cohort["fold_main"].values
-fit_mask = (fold == "train") | (fold == "valid")
-REL_END = np.datetime64("2024-12-31")
-te_base = (fold == "test") & (year_all <= 2024)
-mature = {H: te_base & ((t_all + np.timedelta64(H, "D")) <= REL_END) for H in (90, 150)}
+EpisodeIndex = dict[int, dict[str, np.ndarray]]
 
-def build_resamples(pids, seed=0, nboot=1000):
-    uniq = np.unique(pids)
-    pos = {p: np.where(pids == p)[0] for p in uniq}
+
+def build_episode_index(episodes: pd.DataFrame) -> EpisodeIndex:
+    """Index episode starts and disclosure dates by pitcher/player id."""
+
+    index: EpisodeIndex = {}
+    for pid, group in episodes.groupby("pid", sort=False):
+        index[int(pid)] = {
+            "start": group["start"].values.astype("datetime64[D]"),
+            "elbow": group["elbow_disclosure_date"].values.astype("datetime64[D]"),
+            "post": group["post_procedure_disclosure_date"].values.astype(
+                "datetime64[D]"
+            ),
+        }
+    return index
+
+
+def elbow_disclosures_asof(
+    index: EpisodeIndex,
+    pid: int,
+    decision_date: np.datetime64,
+    blackout_days: int = 0,
+) -> np.ndarray:
+    """Return new-elbow disclosure dates legally available at decision time."""
+
+    item = index.get(pid)
+    if item is None:
+        return np.array([], dtype="datetime64[D]")
+    t = decision_date.astype("datetime64[D]")
+    cut = t - np.timedelta64(blackout_days, "D")
+    elbow = item["elbow"]
+    post = item["post"]
+    elbow_known_and_old_enough = ~np.isnat(elbow) & (elbow < cut)
+    post_known_at_t = ~np.isnat(post) & (post < t)
+    return np.sort(elbow[elbow_known_and_old_enough & ~post_known_at_t])
+
+
+def any_il_starts_asof(
+    index: EpisodeIndex,
+    pid: int,
+    decision_date: np.datetime64,
+    blackout_days: int = 0,
+) -> np.ndarray:
+    """Return IL episode starts older than the optional blackout."""
+
+    item = index.get(pid)
+    if item is None:
+        return np.array([], dtype="datetime64[D]")
+    t = decision_date.astype("datetime64[D]")
+    cut = t - np.timedelta64(blackout_days, "D")
+    starts = item["start"]
+    return np.sort(starts[starts < cut])
+
+
+def run_asof_self_tests() -> None:
+    """Check disclosure non-retroactivity, post correction, and blackout."""
+
+    nat = np.datetime64("NaT", "D")
+    index: EpisodeIndex = {
+        1: {
+            "start": np.array([np.datetime64("2020-01-01")]),
+            "elbow": np.array([np.datetime64("2020-01-20")]),
+            "post": np.array([np.datetime64("2020-03-01")]),
+        },
+        2: {
+            "start": np.array([np.datetime64("2020-01-01")]),
+            "elbow": np.array([np.datetime64("2020-01-01")]),
+            "post": np.array([nat]),
+        },
+    }
+    assert elbow_disclosures_asof(index, 1, np.datetime64("2020-01-15")).size == 0
+    assert elbow_disclosures_asof(index, 1, np.datetime64("2020-02-01")).size == 1
+    assert elbow_disclosures_asof(index, 1, np.datetime64("2020-03-01")).size == 1
+    assert elbow_disclosures_asof(index, 1, np.datetime64("2020-03-02")).size == 0
+    assert (
+        elbow_disclosures_asof(index, 1, np.datetime64("2020-02-10"), 30).size
+        == 0
+    )
+    assert elbow_disclosures_asof(index, 2, np.datetime64("2020-02-01")).size == 1
+    print("SELF-TEST as-of features: disclosure, post-state, blackout PASS")
+
+
+def pitch_weighted_mean(
+    values: np.ndarray,
+    weights: np.ndarray,
+    mask: np.ndarray,
+) -> float:
+    """Return a pitch-weighted mean over nonmissing observations."""
+
+    valid = mask & ~np.isnan(values)
+    if not valid.any():
+        return np.nan
+    weight_sum = weights[valid].sum()
+    return (
+        float((values[valid] * weights[valid]).sum() / weight_sum)
+        if weight_sum > 0
+        else np.nan
+    )
+
+
+def build_resamples(
+    pitcher_ids: np.ndarray,
+    seed: int = 0,
+    n_boot: int = 1000,
+) -> list[np.ndarray]:
+    """Create shared pitcher-clustered bootstrap row indices."""
+
+    unique_ids = np.unique(pitcher_ids)
+    positions = {pid: np.where(pitcher_ids == pid)[0] for pid in unique_ids}
     rng = np.random.default_rng(seed)
-    return [np.concatenate([pos[p] for p in rng.choice(uniq, size=len(uniq), replace=True)])
-            for _ in range(nboot)]
+    return [
+        np.concatenate(
+            [positions[pid] for pid in rng.choice(unique_ids, size=len(unique_ids), replace=True)]
+        )
+        for _ in range(n_boot)
+    ]
 
-def paired(y_sub, a, b, resamples):
-    ra, rb, pa, pb = [], [], [], []
-    for idx in resamples:
-        yb = y_sub[idx]
-        if yb.sum() == 0 or yb.sum() == len(yb):
+
+def paired_metrics(
+    labels: np.ndarray,
+    baseline: np.ndarray,
+    variant: np.ndarray,
+    resamples: list[np.ndarray],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return paired bootstrap delta ROC and delta PR arrays."""
+
+    delta_roc: list[float] = []
+    delta_pr: list[float] = []
+    for row_index in resamples:
+        y_boot = labels[row_index]
+        if y_boot.sum() == 0 or y_boot.sum() == len(y_boot):
             continue
-        ra.append(roc_auc_score(yb, a[idx])); rb.append(roc_auc_score(yb, b[idx]))
-        pa.append(average_precision_score(yb, a[idx])); pb.append(average_precision_score(yb, b[idx]))
-    return np.array(ra), np.array(rb), np.array(pa), np.array(pb)
+        delta_roc.append(
+            roc_auc_score(y_boot, variant[row_index])
+            - roc_auc_score(y_boot, baseline[row_index])
+        )
+        delta_pr.append(
+            average_precision_score(y_boot, variant[row_index])
+            - average_precision_score(y_boot, baseline[row_index])
+        )
+    return np.asarray(delta_roc), np.asarray(delta_pr)
 
-def ci(x):
-    return float(np.percentile(x, 2.5)), float(np.percentile(x, 97.5))
 
-def excl0(lo, hi):
-    return (lo > 0 and hi > 0) or (lo < 0 and hi < 0)
+def interval(values: np.ndarray) -> tuple[float, float]:
+    """Return the percentile 95% interval."""
 
-def fit_predict(cols, H, mask_fit, mask_pred):
-    y = cohort[f"label_H{H}_B0"].values.astype(int)
-    sc = StandardScaler().fit(F.loc[mask_fit, cols])
-    clf = LogisticRegression(class_weight="balanced", max_iter=2000)
-    clf.fit(sc.transform(F.loc[mask_fit, cols]), y[mask_fit])
-    return clf.predict_proba(sc.transform(F.loc[mask_pred, cols]))[:, 1], clf
+    return float(np.percentile(values, 2.5)), float(np.percentile(values, 97.5))
 
-out = []
-res_cache = {}
-print("\nM_il = M_sa + {elbow2y, dsle_log, anyil2y} — paired vs M_sa (mature test):")
-for H in (90, 150):
-    m = mature[H]
-    y_m = cohort[f"label_H{H}_B0"].values.astype(int)[m]
-    res = build_resamples(pid_all[m])
-    res_cache[H] = (m, y_m, res)
-    p0, _ = fit_predict(M_SA, H, fit_mask, m)
-    p1, clf = fit_predict(M_SA + IL_COLS, H, fit_mask, m)
-    ra, rb, pa, pb = paired(y_m, p0, p1, res)
-    dr = rb - ra; dp = pb - pa
-    drlo, drhi = ci(dr); dplo, dphi = ci(dp)
-    fl = ("  dROC-EXCL0" if excl0(drlo, drhi) else "") + ("  dPR-EXCL0" if excl0(dplo, dphi) else "")
-    coefs = dict(zip(M_SA + IL_COLS, clf.coef_[0].round(3)))
-    out.append(dict(block="additive", H=H, variant="M_il", roc=round(roc_auc_score(y_m, p1), 4),
-                    droc=round(float(np.median(dr)), 5), droc_lo=round(drlo, 5), droc_hi=round(drhi, 5),
-                    dpr=round(float(np.median(dp)), 5), dpr_lo=round(dplo, 5), dpr_hi=round(dphi, 5)))
-    print(f"  H={H}: M_sa {roc_auc_score(y_m, p0):.4f} -> M_il {roc_auc_score(y_m, p1):.4f}  "
-          f"dROC {np.median(dr):+.5f} [{drlo:+.5f},{drhi:+.5f}]  dPR {np.median(dp):+.5f} [{dplo:+.5f},{dphi:+.5f}]{fl}")
-    print(f"    IL coefs: {{k: coefs[k] for k in IL_COLS}}" if False else f"    IL coefs: {dict((k, coefs[k]) for k in IL_COLS)}")
 
-print("\nBlackout sensitivity (paired dROC point vs M_sa, same resamples):")
-for bo in (30, 60, 90):
-    ilb = il_features(bo)
-    for j, c in enumerate(IL_COLS):
-        F[f"{c}_bo"] = ilb[:, j]
-    cols_bo = M_SA + [f"{c}_bo" for c in IL_COLS]
-    for H in (90, 150):
-        m, y_m, res = res_cache[H]
-        p0, _ = fit_predict(M_SA, H, fit_mask, m)
-        p1, _ = fit_predict(cols_bo, H, fit_mask, m)
-        ra, rb, pa, pb = paired(y_m, p0, p1, res)
-        dr = rb - ra
-        drlo, drhi = ci(dr)
-        out.append(dict(block=f"blackout{bo}", H=H, variant=f"M_il_bo{bo}",
-                        roc=round(roc_auc_score(y_m, p1), 4),
-                        droc=round(float(np.median(dr)), 5), droc_lo=round(drlo, 5), droc_hi=round(drhi, 5),
-                        dpr=np.nan, dpr_lo=np.nan, dpr_hi=np.nan))
-        print(f"  blackout {bo}d H={H}: dROC {np.median(dr):+.5f} [{drlo:+.5f},{drhi:+.5f}]")
+def fit_predict(
+    features: pd.DataFrame,
+    labels: np.ndarray,
+    columns: list[str],
+    fit_mask: np.ndarray,
+    predict_mask: np.ndarray,
+) -> tuple[np.ndarray, LogisticRegression]:
+    """Fit the frozen A-IL diagnostic LR form and predict a held-out mask."""
 
-# new-info + lead decomposition at top-50 (H both)
-print("\nNew-info / lead decomposition (top-50 per date):")
-next_surg = pd.to_datetime(cohort["next_surgery_date"]).values
-for H in (90, 150):
-    m, y_m, res = res_cache[H]
-    p0, _ = fit_predict(M_SA, H, fit_mask, m)
-    p1, _ = fit_predict(M_SA + IL_COLS, H, fit_mask, m)
-    t_m = t_all[m]
-    sub_idx = np.where(m)[0]
-    def caught_events(p):
-        flag = np.zeros(int(m.sum()), dtype=bool)
-        for d in np.unique(t_m):
-            sel = np.where(t_m == d)[0]
-            flag[sel[np.argsort(-p[sel], kind="stable")[:min(50, len(sel))]]] = True
-        groups = {}
-        for r in np.where(y_m == 1)[0]:
-            key = (int(pid_all[sub_idx[r]]), pd.Timestamp(next_surg[sub_idx[r]]))
-            groups.setdefault(key, []).append(r)
-        return {k: any(flag[r] for r in rws) for k, rws in groups.items()}, groups
-    c0, groups = caught_events(p0)
-    c1, _ = caught_events(p1)
-    new_caught = [k for k in groups if c1[k] and not c0[k]]
-    lost = [k for k in groups if c0[k] and not c1[k]]
-    il_hist = {}
-    lead = []
-    for k, rws in groups.items():
-        pid, sd = k
-        es = elbow_by_pid.get(pid)
-        has = False
-        if es is not None:
-            before_any = es[es < np.datetime64(sd)]
-            if before_any.size:
-                has = True
-                lead.append(float((np.datetime64(sd) - before_any.max()) / DAY))
-        il_hist[k] = has
-    cw = [k for k in groups if c1[k]]
-    no_hist_share = np.mean([not il_hist[k] for k in cw]) if cw else np.nan
-    print(f"  H={H}: caught M_sa {sum(c0.values())} -> M_il {sum(c1.values())}  "
-          f"(new {len(new_caught)}, lost {len(lost)})  "
-          f"caught-without-elbow-IL-history {no_hist_share:.0%}")
-    if lead:
-        print(f"    lead (last elbow IL -> surgery, all events with history, n={len(lead)}): "
-              f"median {np.median(lead):.0f}d  P25 {np.percentile(lead,25):.0f}d  P75 {np.percentile(lead,75):.0f}d")
+    scaler = StandardScaler().fit(features.loc[fit_mask, columns])
+    model = LogisticRegression(class_weight="balanced", max_iter=2000)
+    model.fit(scaler.transform(features.loc[fit_mask, columns]), labels[fit_mask])
+    predictions = model.predict_proba(
+        scaler.transform(features.loc[predict_mask, columns])
+    )[:, 1]
+    return predictions, model
 
-pd.DataFrame(out).to_csv(OUT / "ail_results.csv", index=False)
-print(f"\n[t={time.time()-t0:.0f}s] wrote {OUT / 'ail_results.csv'}")
+
+def caught_events(
+    scores: np.ndarray,
+    labels: np.ndarray,
+    dates: np.ndarray,
+    pitcher_ids: np.ndarray,
+    surgery_dates: np.ndarray,
+    top_k: int = 50,
+) -> tuple[
+    dict[tuple[int, pd.Timestamp], bool],
+    dict[tuple[int, pd.Timestamp], pd.Timestamp | pd.NaT],
+    dict[tuple[int, pd.Timestamp], list[int]],
+]:
+    """Collapse positive windows to events and retain each first caught alert."""
+
+    alerted = np.zeros(len(labels), dtype=bool)
+    for date in np.unique(dates):
+        rows = np.where(dates == date)[0]
+        ranked = rows[np.argsort(-scores[rows], kind="stable")[: min(top_k, len(rows))]]
+        alerted[ranked] = True
+
+    groups: dict[tuple[int, pd.Timestamp], list[int]] = {}
+    for row in np.where(labels == 1)[0]:
+        key = (int(pitcher_ids[row]), pd.Timestamp(surgery_dates[row]))
+        groups.setdefault(key, []).append(int(row))
+
+    caught: dict[tuple[int, pd.Timestamp], bool] = {}
+    first_alert: dict[tuple[int, pd.Timestamp], pd.Timestamp | pd.NaT] = {}
+    for key, rows in groups.items():
+        alert_rows = [row for row in rows if alerted[row]]
+        caught[key] = bool(alert_rows)
+        first_alert[key] = (
+            min(pd.Timestamp(dates[row]) for row in alert_rows)
+            if alert_rows
+            else pd.NaT
+        )
+    return caught, first_alert, groups
+
+
+def main() -> None:
+    """Run corrected A-IL evaluation and write versioned result artifacts."""
+
+    started = time.time()
+    run_asof_self_tests()
+    cohort = pd.read_parquet(ROOT / "data" / "prospective" / "cohort_v4.parquet")
+    cohort = cohort.sort_values(["t", "pitcher"]).reset_index(drop=True)
+    slim = pd.read_parquet(ROOT / "data" / "prospective" / "slim_games_v4.parquet")
+    slim = slim.sort_values(["pitcher", "game_date"]).reset_index(drop=True)
+    game_features = pd.read_parquet(
+        ROOT / "data" / "prospective" / "game_features_v4.parquet"
+    )
+    game_features = game_features.sort_values(["pitcher", "game_date"]).reset_index(
+        drop=True
+    )
+    episodes = pd.read_parquet(EPISODES_PATH)
+    episode_index = build_episode_index(episodes)
+
+    games_by_pitcher: dict[int, tuple[np.ndarray, ...]] = {}
+    for pid, group in slim.groupby("pitcher", sort=False):
+        games_by_pitcher[int(pid)] = (
+            group["game_date"].values.astype("datetime64[D]"),
+            group["pitch_count"].astype("float64").values,
+            group["mean_release_speed"].astype("float64").values,
+            group["game_year"].values.astype(np.int64),
+        )
+    role_by_pitcher: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+    for pid, group in game_features.groupby("pitcher", sort=False):
+        role_by_pitcher[int(pid)] = (
+            group["game_date"].values.astype("datetime64[D]"),
+            group["total_pitches"].astype("float64").values,
+        )
+
+    n_rows = len(cohort)
+    pitcher_ids = cohort["pitcher"].values.astype(np.int64)
+    decision_dates = cohort["t"].values.astype("datetime64[ns]")
+    years = cohort["year"].values.astype(np.int64)
+    months = cohort["month"].values.astype(np.float64)
+    career_games = cohort["n_career_games"].values.astype(np.float64)
+    prior_pc_rate = np.zeros(n_rows)
+    velocity_missing = np.zeros(n_rows)
+    start_share = np.zeros(n_rows)
+    base_rows: list[tuple[float, ...]] = []
+
+    for row in range(n_rows):
+        pid = int(pitcher_ids[row])
+        decision_date = decision_dates[row].astype("datetime64[D]")
+        game_date, pitch_count, speed, game_year = games_by_pitcher[pid]
+        before = game_date < decision_date
+        last_30 = before & (game_date >= decision_date - np.timedelta64(30, "D"))
+        last_90 = before & (game_date >= decision_date - np.timedelta64(90, "D"))
+        pc_30 = pitch_count[last_30].sum()
+        pc_90 = pitch_count[last_90].sum()
+        days_since_last = float((decision_date - game_date[before].max()) / DAY)
+        speed_30 = pitch_weighted_mean(speed, pitch_count, last_30)
+        year = int(years[row])
+        speed_prior = pitch_weighted_mean(
+            speed,
+            pitch_count,
+            before & (game_year < year),
+        )
+        if np.isnan(speed_prior):
+            speed_prior = pitch_weighted_mean(
+                speed,
+                pitch_count,
+                before & (game_date < decision_date - np.timedelta64(30, "D")),
+            )
+        if np.isnan(speed_30) or np.isnan(speed_prior):
+            velocity_trend = 0.0
+            velocity_missing[row] = 1.0
+        else:
+            velocity_trend = speed_30 - speed_prior
+        prior_years = game_year[before & (game_year < year)]
+        if prior_years.size:
+            prior_year_mask = before & (game_year == prior_years.max())
+            prior_pc_rate[row] = pitch_count[prior_year_mask].sum() / 183.0
+        base_rows.append(
+            (
+                pc_90 / 90.0,
+                pc_30 / 30.0 - pc_90 / 90.0,
+                days_since_last,
+                velocity_trend,
+                months[row],
+            )
+        )
+        role_date, role_pitches = role_by_pitcher[pid]
+        role_mask = (role_date < decision_date) & (
+            role_date >= decision_date - np.timedelta64(365, "D")
+        )
+        role_games = int(role_mask.sum())
+        start_share[row] = (
+            float((role_pitches[role_mask] >= 50).sum()) / role_games
+            if role_games > 0
+            else 0.0
+        )
+
+    features = pd.DataFrame(
+        base_rows,
+        columns=[
+            "pc_chronic",
+            "pc_acute_dev",
+            "days_since_last",
+            "vel_trend",
+            "month",
+        ],
+    )
+    features["start_share"] = start_share
+    features["prior_pc_rate"] = prior_pc_rate
+    features["ncg_log"] = np.log1p(career_games)
+    features["vt_missing"] = velocity_missing
+    assert (
+        np.abs(
+            features["days_since_last"].values
+            - cohort["dsl"].values.astype(float)
+        ).max()
+        < 1e-6
+    )
+    base_columns = list(features.columns)
+    print(f"[t={time.time() - started:.0f}s] base features built")
+
+    def il_features(blackout_days: int = 0) -> np.ndarray:
+        """Build disclosure-time elbow/any-IL features for every decision row."""
+
+        values = np.zeros((n_rows, 3))
+        for row in range(n_rows):
+            pid = int(pitcher_ids[row])
+            t = decision_dates[row].astype("datetime64[D]")
+            elbow_dates = elbow_disclosures_asof(
+                episode_index,
+                pid,
+                t,
+                blackout_days,
+            )
+            if elbow_dates.size:
+                values[row, 0] = (
+                    elbow_dates >= t - np.timedelta64(730, "D")
+                ).sum()
+                values[row, 1] = np.log1p(
+                    min(float((t - elbow_dates.max()) / DAY), CAP)
+                )
+            else:
+                values[row, 1] = np.log1p(CAP)
+            any_starts = any_il_starts_asof(
+                episode_index,
+                pid,
+                t,
+                blackout_days,
+            )
+            if any_starts.size:
+                values[row, 2] = (
+                    any_starts >= t - np.timedelta64(730, "D")
+                ).sum()
+        return values
+
+    base_il = il_features(0)
+    for column_index, column in enumerate(IL_COLS):
+        features[column] = base_il[:, column_index]
+    print(
+        f"coverage: elbow2y>0 in {(features['elbow2y'] > 0).mean():.2%} "
+        f"of windows; anyil2y>0 in {(features['anyil2y'] > 0).mean():.2%}"
+    )
+
+    fold = cohort["fold_main"].values
+    fit_mask = (fold == "train") | (fold == "valid")
+    reliable_end = np.datetime64("2024-12-31")
+    test_base = (fold == "test") & (years <= 2024)
+    mature = {
+        horizon: test_base
+        & ((decision_dates + np.timedelta64(horizon, "D")) <= reliable_end)
+        for horizon in (90, 150)
+    }
+
+    result_rows: list[dict[str, Any]] = []
+    result_cache: dict[
+        int,
+        tuple[np.ndarray, np.ndarray, list[np.ndarray], np.ndarray, np.ndarray],
+    ] = {}
+    print("\nM_il = M_sa + disclosure-time IL features — paired mature test:")
+    for horizon in (90, 150):
+        mask = mature[horizon]
+        labels_all = cohort[f"label_H{horizon}_B0"].values.astype(int)
+        labels = labels_all[mask]
+        resamples = build_resamples(pitcher_ids[mask])
+        base_score, _ = fit_predict(
+            features,
+            labels_all,
+            base_columns,
+            fit_mask,
+            mask,
+        )
+        variant_score, model = fit_predict(
+            features,
+            labels_all,
+            base_columns + IL_COLS,
+            fit_mask,
+            mask,
+        )
+        delta_roc, delta_pr = paired_metrics(
+            labels,
+            base_score,
+            variant_score,
+            resamples,
+        )
+        roc_low, roc_high = interval(delta_roc)
+        pr_low, pr_high = interval(delta_pr)
+        result_cache[horizon] = (
+            mask,
+            labels,
+            resamples,
+            base_score,
+            variant_score,
+        )
+        result_rows.append(
+            {
+                "block": "additive",
+                "H": horizon,
+                "variant": "M_il_asof",
+                "n_windows": int(mask.sum()),
+                "positive_windows": int(labels.sum()),
+                "base_roc": roc_auc_score(labels, base_score),
+                "variant_roc": roc_auc_score(labels, variant_score),
+                "droc": float(np.median(delta_roc)),
+                "droc_lo": roc_low,
+                "droc_hi": roc_high,
+                "base_pr": average_precision_score(labels, base_score),
+                "variant_pr": average_precision_score(labels, variant_score),
+                "dpr": float(np.median(delta_pr)),
+                "dpr_lo": pr_low,
+                "dpr_hi": pr_high,
+            }
+        )
+        coefficients = dict(
+            zip(base_columns + IL_COLS, np.round(model.coef_[0], 3), strict=True)
+        )
+        print(
+            f"  H={horizon}: ROC {roc_auc_score(labels, base_score):.4f} -> "
+            f"{roc_auc_score(labels, variant_score):.4f}; "
+            f"dROC {np.median(delta_roc):+.5f} [{roc_low:+.5f},{roc_high:+.5f}]; "
+            f"dPR {np.median(delta_pr):+.5f} [{pr_low:+.5f},{pr_high:+.5f}]"
+        )
+        print(f"    IL coefs: { {key: coefficients[key] for key in IL_COLS} }")
+
+    print("\nBlackout sensitivity (post state remains as-of t):")
+    for blackout in (30, 60, 90):
+        blackout_values = il_features(blackout)
+        blackout_columns: list[str] = []
+        for column_index, column in enumerate(IL_COLS):
+            blackout_column = f"{column}_bo{blackout}"
+            features[blackout_column] = blackout_values[:, column_index]
+            blackout_columns.append(blackout_column)
+        for horizon in (90, 150):
+            mask, labels, resamples, base_score, _ = result_cache[horizon]
+            labels_all = cohort[f"label_H{horizon}_B0"].values.astype(int)
+            variant_score, _ = fit_predict(
+                features,
+                labels_all,
+                base_columns + blackout_columns,
+                fit_mask,
+                mask,
+            )
+            delta_roc, delta_pr = paired_metrics(
+                labels,
+                base_score,
+                variant_score,
+                resamples,
+            )
+            roc_low, roc_high = interval(delta_roc)
+            pr_low, pr_high = interval(delta_pr)
+            result_rows.append(
+                {
+                    "block": f"blackout{blackout}",
+                    "H": horizon,
+                    "variant": f"M_il_asof_bo{blackout}",
+                    "n_windows": int(mask.sum()),
+                    "positive_windows": int(labels.sum()),
+                    "base_roc": roc_auc_score(labels, base_score),
+                    "variant_roc": roc_auc_score(labels, variant_score),
+                    "droc": float(np.median(delta_roc)),
+                    "droc_lo": roc_low,
+                    "droc_hi": roc_high,
+                    "base_pr": average_precision_score(labels, base_score),
+                    "variant_pr": average_precision_score(labels, variant_score),
+                    "dpr": float(np.median(delta_pr)),
+                    "dpr_lo": pr_low,
+                    "dpr_hi": pr_high,
+                }
+            )
+            print(
+                f"  blackout {blackout}d H={horizon}: "
+                f"dROC {np.median(delta_roc):+.5f} [{roc_low:+.5f},{roc_high:+.5f}], "
+                f"dPR {np.median(delta_pr):+.5f} [{pr_low:+.5f},{pr_high:+.5f}]"
+            )
+
+    print("\nEvent-level top-50 and alert-time as-of lead:")
+    alert_rows: list[dict[str, Any]] = []
+    surgery_dates_all = pd.to_datetime(cohort["next_surgery_date"]).values
+    for horizon in (90, 150):
+        mask, labels, _, base_score, variant_score = result_cache[horizon]
+        dates = decision_dates[mask]
+        selected_pitchers = pitcher_ids[mask]
+        surgery_dates = surgery_dates_all[mask]
+        caught_base, first_base, groups = caught_events(
+            base_score,
+            labels,
+            dates,
+            selected_pitchers,
+            surgery_dates,
+        )
+        caught_variant, first_variant, _ = caught_events(
+            variant_score,
+            labels,
+            dates,
+            selected_pitchers,
+            surgery_dates,
+        )
+        for key in groups:
+            pid, surgery_timestamp = key
+            variant_alert = first_variant[key]
+            history_dates = (
+                elbow_disclosures_asof(
+                    episode_index,
+                    pid,
+                    np.datetime64(variant_alert),
+                )
+                if pd.notna(variant_alert)
+                else np.array([], dtype="datetime64[D]")
+            )
+            latest_history = history_dates.max() if history_dates.size else np.datetime64("NaT")
+            alert_rows.append(
+                {
+                    "H": horizon,
+                    "pitcher": pid,
+                    "surgery_date": surgery_timestamp.date(),
+                    "caught_base": caught_base[key],
+                    "caught_il": caught_variant[key],
+                    "new_caught": caught_variant[key] and not caught_base[key],
+                    "lost": caught_base[key] and not caught_variant[key],
+                    "first_base_alert": first_base[key],
+                    "first_il_alert": variant_alert,
+                    "elbow_history_asof_il_alert": bool(history_dates.size),
+                    "last_elbow_disclosure_asof_il_alert": (
+                        pd.Timestamp(latest_history) if history_dates.size else pd.NaT
+                    ),
+                    "history_disclosure_lead_days": (
+                        (surgery_timestamp - pd.Timestamp(latest_history)).days
+                        if history_dates.size
+                        else np.nan
+                    ),
+                    "alert_lead_days": (
+                        (surgery_timestamp - pd.Timestamp(variant_alert)).days
+                        if pd.notna(variant_alert)
+                        else np.nan
+                    ),
+                }
+            )
+
+        horizon_rows = [row for row in alert_rows if row["H"] == horizon]
+        caught_rows = [row for row in horizon_rows if row["caught_il"]]
+        history_rows = [
+            row for row in caught_rows if row["elbow_history_asof_il_alert"]
+        ]
+        history_lead = np.asarray(
+            [row["history_disclosure_lead_days"] for row in history_rows],
+            dtype=float,
+        )
+        alert_lead = np.asarray(
+            [row["alert_lead_days"] for row in caught_rows],
+            dtype=float,
+        )
+        without_history = sum(
+            not row["elbow_history_asof_il_alert"] for row in caught_rows
+        )
+        print(
+            f"  H={horizon}: caught M_sa {sum(caught_base.values())} -> "
+            f"M_il {sum(caught_variant.values())}; "
+            f"new {sum(row['new_caught'] for row in horizon_rows)}, "
+            f"lost {sum(row['lost'] for row in horizon_rows)}, "
+            f"without history at caught alert {without_history}/{len(caught_rows)}"
+        )
+        if history_lead.size:
+            print(
+                "    history disclosure -> surgery among caught/history: "
+                f"median {np.median(history_lead):.0f}d "
+                f"[P25 {np.percentile(history_lead, 25):.0f}, "
+                f"P75 {np.percentile(history_lead, 75):.0f}], n={len(history_lead)}"
+            )
+        if alert_lead.size:
+            print(
+                "    first caught alert -> surgery: "
+                f"median {np.median(alert_lead):.0f}d "
+                f"[P25 {np.percentile(alert_lead, 25):.0f}, "
+                f"P75 {np.percentile(alert_lead, 75):.0f}], n={len(alert_lead)}"
+            )
+
+    pd.DataFrame(result_rows).to_csv(RESULTS_PATH, index=False, float_format="%.8f")
+    pd.DataFrame(alert_rows).to_csv(ALERTS_PATH, index=False)
+    print(
+        f"\n[t={time.time() - started:.0f}s] wrote {RESULTS_PATH} and {ALERTS_PATH}"
+    )
+
+
+if __name__ == "__main__":
+    main()

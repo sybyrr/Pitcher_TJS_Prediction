@@ -1,5 +1,109 @@
 # A-IL 블록 — 팔꿈치-IL 이력 feature (2026-07-13, 사양 v2)
 
+> **구현 정정 완료 (2026-07-14, M1 A-IL 감사 보수):** 아래 2026-07-13
+> 본문과 `ail_results.csv`는 이력 보존을 위한 **legacy 결과**다. 이후
+> transaction의 elbow/수술 상태를 episode 시작으로 소급하던 parser,
+> transfer/activation gap 처리, surgery-date 기준 history/lead를 코드에서
+> 보수했다. 정정 정본은 `il_episodes_asof_v2.parquet`,
+> `ail_results_asof_v2.csv`, `ail_alert_events_asof_v2.csv`다. **TJS-only
+> label과 canonical 미채택은 변경하지 않는다.**
+
+## 2026-07-14 corrected as-of 결과
+
+### 결정
+
+**canonical 미채택 유지.** 전체 공개 IL 신호의 증분은 재현되지만 30–90일
+blackout 증분은 모두 0과 양립한다. 60일 점추정은 정정 뒤 H90/H150 모두
+미세한 양수(`+0.00577/+0.00232`)가 되어 legacy의 사전 방향-only 조건을
+기계적으로 만족한다. 그러나 이는 결과를 이미 본 뒤 parser 정의를 바로잡은
+감사 결과이므로 소급 승격 근거로 사용하지 않는다. 95% CI는 두 horizon 모두
+0을 포함하고 90일 H90은 다시 음수다. 분류는 계속 **공개 진단 후 triage
+재검정 후보**이며, 조기경보 canonical feature가 아니다.
+
+### 구현 정정
+
+- episode에는 `elbow_disclosure_date`, `post_tjs_disclosure_date`, 더 넓은
+  `post_procedure_disclosure_date`를 별도로 보존한다. t 시점 feature는
+  `disclosure_date < t`인 정보만 사용한다. 뒤늦은 transfer의 elbow/TJS
+  문구는 episode `start`로 소급되지 않는다.
+- placement·transfer·activation **모두** 현재 open episode의 마지막
+  action과 60일 초과 gap인지 먼저 검사한다. 초과 시 `gap_timeout`으로
+  닫고, transfer는 새 공개 episode를 열며 activation은 orphan으로
+  기록한다. activation이 60일 이내면 `activation`으로 닫는다.
+- ontology는 세 층으로 분리했다: 명시적 Tommy John, UCL surgery/
+  reconstruction/repair, 기타 완료 elbow procedure. feature의
+  `new_elbow` 상태는 당시 공개된 완료 procedure를 제외한다. 미래 의도
+  (`scheduled`, `recommended`, `will`, `may need`)와 thumb/finger/wrist UCL은
+  제외한다.
+- 내장 회귀 예: `Recovering May ... Tommy John surgery`, `Tommy John
+  surgery recovery`, `Right UCL surgery rehab`은 완료 procedure true;
+  `UCL sprain`, `Tommy John surgery recommended`, `Scheduled to undergo ...`,
+  `Right thumb UCL repair`는 false다. ontology 25개와 synthetic episode
+  disclosure/gap/closure 검사가 통과했다.
+- blackout은 elbow/any-IL 공개일을 t−X 이전으로 제한하되, t 시점에 이미
+  공개된 post-procedure 상태를 숨겨 과거 elbow episode를 되살리지 않는다.
+
+### corrected 데이터 gate
+
+- 입력 action은 legacy와 동일한 **13,827행**(place 7,221 / transfer 1,145 /
+  activate 5,461)이다.
+- 일관된 gap 처리 후 **6,816 episode**: activation closure 4,101,
+  gap-timeout 2,031, right-censored 684. 누락/장기 gap 뒤 transfer가 연
+  episode 143, gap 뒤 unmatched activation 1,360은 별도 audit count다.
+- elbow 1,079, 명시적 TJS/UCL procedure 140, 모든 완료 elbow procedure
+  183, final-state new-elbow 896이다. final-state 수치는 설명용이며 실제
+  feature는 각 decision date의 as-of 상태를 다시 계산한다.
+- elbow가 episode 시작 뒤 처음 공개된 경우는 **36건**(lag 중앙값 20일,
+  최대 88일). legacy 감사의 33건/최대 773일과 차이가 나는 이유는 60일
+  초과 transfer를 이전 episode에 붙이지 않고 새 episode로 분리했기 때문이다.
+- cohort window coverage는 elbow2y 16.03%, anyil2y 61.40%다.
+
+### corrected paired 결과
+
+동결 fold, mature 경계 `t+H≤2024-12-31`, 투수-clustered bootstrap
+1,000회(seed 0), legacy A-IL diagnostic LR 형태를 그대로 사용했다.
+
+| 항목 | H90 | H150 |
+|---|---:|---:|
+| 전체 ROC (M_sa→M_il) | 0.6920→0.7605 | 0.6917→0.7361 |
+| 전체 dROC | **+0.06862 [+0.01280,+0.12308]** | **+0.04453 [+0.00151,+0.08845]** |
+| 전체 dPR | **+0.07883 [+0.04087,+0.12750]** | **+0.07120 [+0.03931,+0.11546]** |
+| blackout 30d dROC | +0.00775 [−0.04669,+0.06572] | −0.00075 [−0.03731,+0.04019] |
+| **blackout 60d dROC** | **+0.00577 [−0.02787,+0.04803]** | **+0.00232 [−0.02067,+0.02990]** |
+| blackout 90d dROC | −0.00614 [−0.03920,+0.03005] | −0.00011 [−0.01950,+0.02101] |
+
+### caught-alert 기준 history와 lead
+
+각 사건에서 M_il top-50에 처음 포착된 decision date를 `first_il_alert`로
+고정한 뒤, 그 alert **직전 공개돼 있던** elbow history만 조회했다. 수술일
+이전 아무 episode나 사후 검색하는 legacy 계산은 사용하지 않았다.
+
+| 항목 | H90 | H150 |
+|---|---:|---:|
+| event recall@50 (M_sa→M_il) | 24→41 / 75 | 23→43 / 80 |
+| 신규 포착 / 상실 | 26 / 9 | 25 / 5 |
+| caught alert 당시 elbow history 없음 | 0/41 | 2/43 |
+| history 공개→수술 lead, 중앙값 [P25,P75] | 56 [25,74]일 (n=41) | 56 [25,83]일 (n=41) |
+| 첫 caught alert→수술 lead, 중앙값 [P25,P75] | 36 [16,53]일 | 37 [16,68]일 |
+
+따라서 정정된 공개-history lead는 약 56일이지만, 모델의 실제 첫 caught
+alert는 중앙값 36–37일 전이다. 전체 신호의 대부분이 임박한 공개 elbow
+진단을 재포장한다는 해석은 유지된다. legacy의 "잡힌 사건 중 history
+전무 0%"는 H90에는 맞지만 H150에는 2/43 예외가 있어 철회한다.
+
+### 재현 산출물
+
+- parser: `scripts/ail_parse.py` →
+  `data/ail/il_episodes_asof_v2.parquet` (SHA-256
+  `f1aea9d48297acbc8814cb25cca50e501fc6d06818d90e5f1ef7eb3c443eeb15`)
+- 평가: `scripts/ail_eval.py` → `ail_results_asof_v2.csv` (SHA-256
+  `9943dacb6aa217dbf9071f45c1e04bb16c769e01f14f109d6a9bfb352cff9734`) +
+  `ail_alert_events_asof_v2.csv` (SHA-256
+  `8b49fcc898097163d6ec12be280661c596a78f50159fa778a8a690b00710c327`)
+- `.venv` Python으로 parser/eval 내장 테스트와 `py_compile` 통과. parser
+  parquet 및 두 CSV는 연속 재실행에서 byte-identical hash를 확인했다.
+  legacy `il_episodes.parquet`와 `ail_results.csv`는 덮어쓰지 않았다.
+
 > **정정 (2026-07-13, codex 3차 감사 수용 — fable 재계산 검증):**
 > parser 한계 3종 확인. ① **elbow 플래그 소급**: episode 내 이후
 > transaction(transfer 등)의 텍스트가 episode 시작일로 소급됨 —
@@ -19,7 +123,7 @@
 IL은 입력 feature만. 코드 `scripts/{ail_fetch,ail_parse,ail_eval}.py`,
 수치 `ail_results.csv`, 데이터 `data/ail/` (gitignore).
 
-## 판정 요약
+## 판정 요약 [legacy parser의 철회된 2026-07-13 원문]
 
 **canonical 미채택.** 전체-feature 개선은 크지만(+0.068/+0.046 EXCL0),
 사전 등록 blackout 게이트(60일에서 방향 유지)를 **실패** — 신호의 실체는

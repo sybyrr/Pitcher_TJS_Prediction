@@ -751,3 +751,387 @@ H=365 탐색, within-pitcher 고정효과, Dillon식 최종 등판 이상탐지.
      ca7c4e73..., 2026 ab7e8b87...); 향후 채점은 상태 로드 방식 +
      append-only + 사용자 git commit/tag 권고.
 - 회고 문서도 동일 정정 반영 (quota·감사 3회·envelope·stress reference).
+- **사용자 결정 (2026-07-13)**: 불펜 별도 정렬 보조 명단은 **KBO 적용
+  후 검토 항목으로 보류** — PROJECT_MEMORY 4절 열린 후보 +
+  KBO_applicability.md 5b절에 기록.
+- **데모 시트 생성 (사용자 지시)**: 테스트 기간 월별 top-20 명단
+  (이름·P90/P150·근거 분해·실제 수술 여부) →
+  `results/phase3/demo_test_top20.csv` + `scripts/demo_test_top20.py`
+  (동결 계수 재현 assert, 읽기 전용 — canonical 불변, 데모/제안서용).
+  적중 예시: Mize(6/1 1위 → 14일 후 수술), 류현진(5/1 5위 → 48일 후),
+  Buehler(8/1 2위 → 22일 후). top-20 행 360개 중 90일 내 수술 19행
+  (11명). **KBO 이전 후 로컬 웹 대시보드(순위·근거·읽는 법·검색)
+  구축 아이디어 — 사용자 제안, KBO 단계 검토 항목** (KBO_applicability
+  5b절에 추가).
+- **문서 재정리 (사용자 지시)**: PROJECT_RETROSPECTIVE.md **삭제**,
+  대체 = **`progress_MLB.md`** — 7/8 이후 진행을 일반 독자용으로 재작성
+  (사용자가 7/7까지는 직접 정리함). 내용: 입력/출력 정의(datapoint =
+  투수×결정일, t 이전 정보만), feature 9개 표, 로지스틱+5칸 구조의
+  정확한 의미(공통 감쇠, 순위 동치), 표준화는 학습 구간 자 고정, 절대
+  확률 인용 규칙, 계수 해석·위험 프로필, 감사 3회·인용 규칙, 기각
+  목록, 불펜 상태, 데모 사례, 동결·남은 일 — 사용자 질문에서 드러난
+  불명확 지점들을 정면으로 다룸.
+
+### 2026-07-13 (계속 6) — KBO 이전 계획 제안 v1 (승인 대기, 미실행)
+
+**전제 (계획의 지렛대)**: 동결 모델의 입력 = 경기별 투구수·등판일·선발
+여부 (+구속 추세, 기여 ≈0). 트래킹 불필요(MLB에서 증분 널). → KBO
+공개 박스스코어 수준으로 feature 8/9개 계산 가능성 높음. 진짜 병목은
+**부상 라벨** (공개 TJS 시트 부재; 뉴스 재구성은 1군 편향, 연 5-15건
+추정 — R4). 라벨은 TJS-only 유지(팀원 트랙 충돌 방지).
+
+**단계 (각 단계 착수는 별도 "시작" 지시)**:
+- **K0 — 공개 소스 정찰 (읽기 전용, 1-2일)**: ① KBO 경기별 투구수·
+  선발 여부·등판일의 공개 가용성 확정 (KBO 기록실/스탯티즈; 연도
+  커버리지, 수집 방식·약관 확인) ② 구속 가용성 (없어도 진행 가능
+  명시) ③ 뉴스 기반 TJS 라벨 v0 스코핑 (검색 전략·예상 건수·수술일
+  정밀도). **게이트: 투구수 ≥6시즌 + 라벨 ≥30건 전망** — 미달 시 계획
+  수정 후 재보고.
+- **K1 — 공개 데이터 구축**: 경기 로그 수집 + sanity(연도별 경기수·
+  투구수 분포), 뉴스 라벨 시트 v1(수술일 정밀도·하한 명시), cohort
+  이식 (결정일 grid는 KBO 시즌에 맞춰 사전 결정 — 기본 제안 4-9월
+  유지), feature 8개(+구속 가용 시 9개), 표준화는 KBO 학습 구간 기준.
+- **K2 — 예비 재적합·정직 평가**: 시간 분할 fold(가용 연도에 따라
+  사전 등록), 투수-clustered bootstrap, rolling 방향 검사. **성공 기준
+  (사전 등록) = 파이프라인 작동 + 방향성 확인 — 사건 수 부족으로 CI가
+  넓을 것을 명시, 내부 라벨 확보 전 "성능 주장" 금지.** 선택: MLB 동결
+  계수 zero-shot vs KBO 재적합 비교 리포트 (계수 이식 아님 — 참조
+  실험).
+- **K3 — 제안 패키지**: 제안서(사용자) + progress_MLB.md + KBO 예비
+  결과/데모 (가능하면 대시보드 프로토타입). **데이터 요청 우선순위
+  재정의: ① 부상자명단 상세(부위·일자·진단, 2020~) ② TJS/UCLR
+  수술일 ③ (2차) 트랙맨 원자료 — MLB에서 트래킹 증분 널이었음을
+  정직 명시, "검증 목적" 프레임.** 프라이버시 친화 검증 제안 카드:
+  우리 점수를 사전 봉인 → 구단이 내부 라벨로 자체 채점 (라벨 반출
+  불필요).
+- **K4 — 협조 후**: 내부 라벨 본평가 → 재적합·재보정 → quota·불펜
+  보조 명단 재검토 (KBO_applicability 5b) → 월별 명단 + 대시보드 배포.
+
+**사용자 결정 필요**: ① K0 착수 여부 ② 라벨 수집 방식 (수작업 vs
+반자동 — 약관 확인 선행) ③ 결정일 grid (4-9월 유지 vs KBO 시즌 맞춤)
+④ 팀원 트랙과의 조율 확인. **미실행 상태 — "시작" 지시 대기.**
+
+### 2026-07-13 (계속 7) — KBO 이전 계획 v2 (codex 감사 정정, 승인 대기·미실행)
+
+**판정**: K0-first, 라벨 우선, MLB 계수·quota 비이식이라는 v1의 큰
+방향은 정당하다. 다만 공개 뉴스 라벨은 미보도자를 음성으로 확정할 수
+없는 **positive-unlabeled(PU) 확정 사례 registry**이므로, 이를 0/1
+라벨처럼 사용한 K2 재적합·ROC·방향성 판정은 철회한다. v1과 충돌하면
+아래 분기형 v2가 우선한다. 각 단계는 여전히 사용자의 별도 `시작` 지시
+후에만 착수하며, 이 절 작성 시 코드·수집·실험은 실행하지 않았다.
+
+**선택지와 권고**:
+
+| 안 | 공개 단계 | 내부 라벨 전 성능 주장 | 판정 |
+|---|---|---|---|
+| A — v1 유지 | 뉴스 라벨로 예비 재적합 | 방향성·예비 ROC | 기각(PU 편향) |
+| **B — 분기형 v2** | exposure 파이프라인 + 확정 사례 기술분석 | **금지** | **권고** |
+| C — 전면 대기 | 내부 라벨 전 아무것도 구축하지 않음 | 없음 | 과도하게 보수적 |
+
+**고정 feature mapping (결과를 보기 전에 데이터 QC로 경로 결정)**:
+- **KBO-B7 (public boxscore anchor)** = pc_chronic, pc_acute_dev,
+  days_since_last, month, start_share, prior_pc_rate, ncg_log. 구속이 전혀
+  없으면 vel_trend와 vt_missing은 모두 식별 불가능한 상수이므로
+  "8/9개"가 아니라 **7개**다.
+- **KBO-V9** = B7 + vel_trend + vt_missing. 일자별 구속의 정의·단위·
+  장기 coverage·측정체계 정합이 gate를 통과할 때만 별도 secondary로
+  연다. MLB에서 Tier-2 증분을 검출하지 못했다는 결과는 tracking이
+  KBO에서도 무가치하다는 뜻이 아니라, B7의 선행 조건이 아니라는 뜻이다.
+- frozen start_share는 실제 GS가 아니라 trailing 365일 등판 중 **50구
+  이상 경기 비율**이다. 공식 GS share는 역할 평가·불펜 정책용 별도
+  변수이며 anchor feature를 몰래 대체하지 않는다.
+- 구현 정본의 vel_trend 기준은 "직전 시즌"이 아니라 현재 연도보다 앞선
+  **모든 시즌의 투구수 가중 구속**(없으면 t-30일 이전 이력 fallback)이다.
+  KBO 구현 전 코드 기준 feature dictionary와 단위·censoring crosswalk를
+  먼저 봉인한다.
+
+**K0 — read-only feasibility + 권리·접근 gate (수집 없음)**:
+1. 공식 KBO/KBOP 또는 허가된 공급자에서 player/game ID, 경기일,
+   등판별 투구수, 정정·더블헤더·서스펜디드 경기, 팀 이동을 연결할 수
+   있는지 수동 schema 표본으로 확인한다. 최소 6개 완결 decision season에
+   더해 365일 burn-in·직전 시즌·as-of 경력 경기수를 계산할 pre-history가
+   필요하다.
+2. **페이지 공개와 대량 수집 허가는 별개**다. KBO/STATIZ 약관, 저장·
+   파생물 공개 범위, 재현 snapshot 허용 여부를 확인하고, export/API 또는
+   서면 사용 허가가 없으면 K1 자동수집을 시작하지 않는다. STATIZ
+   scraper·비공식 API는 서면 승인 전 제외한다.
+3. 뉴스/구단발표에서 실제 시행된 UCLR/TJS를 찾는 검색 universe와 증거
+   ontology를 고정한다: A=시행+정확일, B=시행 확인+날짜 구간,
+   C=예정/발표일·술식(UCLR vs repair/internal brace) 불명확. 발표일,
+   예정일, 시행일, primary/revision/repair, 출처를 별도 필드로 둔다.
+4. 기존 `투구수 ≥6시즌 + 라벨 ≥30건 전망`은 폐기한다. 30건은 case
+   discovery 목표일 수는 있어도 supervised gate가 아니다. 실제 확인한
+   distinct 사건, 날짜 정밀도, eligible universe의 ascertainment와
+   train/valid/test별 사건 수·예상 CI 정밀도를 보고한다.
+5. 결정일은 outcome을 연결하기 전에 봉인한다. **비교 anchor는 4/1–9/1
+   고정**, season-aware 30일 grid는 운영 challenger로만 사전 정의하고,
+   2020 지연 개막은 별도 민감도로 둔다. K0 schedule matrix를 본 뒤 둘의
+   최종 지위를 정하되 TJS 결과는 보지 않는다.
+
+**K1-F — 승인된 exposure·feature/cohort 구축**:
+- 허가된 소스만 사용해 1군 정규시즌 등판을 primary로 구축하고, raw
+  snapshot·source/version/hash·ID crosswalk를 보존한다. t 당일 경기는
+  제외한다. primary risk set은 결정일 현재 **KBO 구단 통제 roster**
+  (1군·2군·IL 포함) 중 ≥20 KBO 1군 경기·최근 365일 내 1군 등판을
+  충족한 투수로 정의한다. 공개 roster history가 이를 완전히 복원하지
+  못하면 approximate cohort로 표시한다. 해외/은퇴/방출 뒤 horizon의
+  수술 follow-up이 불완전한 창은 음성이 아니라 censor하며, formal
+  binary/time-dependent metric 처리 규칙을 결과 조회 전에 고정한다.
+- B7을 primary anchor로 고정한다. V9는 K0 velocity gate 통과 시에만
+  동일 coverage의 secondary로 구성한다. 2군·재활·불펜 세션 등 숨은
+  workload는 공개 B7의 결측/오분류 한계로 기록하고 내부 요청 항목으로
+  넘긴다.
+
+**K1-L — 공개 확정 사례 registry (음성 라벨 생성 금지)**:
+- A만 exact-date primary case, B는 interval-censor/날짜 민감도, C는
+  discovery 전용으로 둔다. 비보도 선수는 0이 아니라 **unknown**이다.
+- 공개 확인 사건 수는 사건 수의 하한일 수 있지만, 선택편향 때문에
+  ROC/성능의 하한은 아니다. loss-to-follow-up과 KBO 이탈 후 수술도
+  음성으로 강제하지 않는다.
+
+**K2-public — engineering/domain-shift 기술 감사만**:
+- 허용: source·ID·coverage·as-of/leakage QC, B7/V9 support·결측·분포,
+  frozen MLB state를 그대로 쓴 zero-shot 순위의 기계적 transport 점검,
+  확정 A/B 사례의 당시 percentile·lead를 **편향된 case-series**로 보고.
+- 금지: 뉴스 unknown을 음성으로 둔 KBO 재적합, ROC/PR/Brier/lift,
+  prevalence·calibration·절대확률, feature/정책 선택. null을 포함해 모든
+  사전 endpoint를 보고하며 "방향성 확인"을 성공 기준으로 삼지 않는다.
+- zero-shot은 `frozen_model_state.json`의 **MLB scaler+계수**를 함께 쓰고
+  순위 transport stress로만 부른다. 구속이 없을 때는 `vel_trend=0,
+  vt_missing=1`인 **missing-velocity transport stress**로 명명한다.
+  KBO scaler를 쓰면 zero-shot이 아니다.
+
+**K3 — 데이터 협력·거버넌스 제안**:
+1. 최우선: eligible roster 전체에 대한 실제 UCLR/TJS 시행 여부·정확일·
+   primary/revision/repair 구분·stable pseudonymous ID·follow-up 완전성.
+   KBO가 exact surgery registry를 보유한다고 단정하지 않고 존재·형태부터
+   확인한다.
+2. 1·2군/재활 등판 workload, 로스터·이적·실제 GS/역할, 가능하면 숨은
+   투구량. 공개 source 권리가 불명확하면 승인된 export/API도 함께 요청한다.
+3. IL 부위·진단·일자는 case ascertainment/auxiliary용이며 TJS primary
+   label을 대체하지 않는다. tracking 원자료는 B7 이후 증분 검정용 4순위다.
+4. 라벨 반출이 어렵다면 점수/컨테이너를 기관 내부에서 실행하고 aggregate
+   metric만 반환한다. 데이터사용계약·기관/의료/개인정보 검토, 최소권한,
+   가명화와 audit trail을 제안서에 포함한다.
+
+**K4 — 내부 완전 라벨 확보 후 supervised refit·locked 평가**:
+- reliable label end와 H90/H150 censoring을 고정한 뒤, 가장 최근의 완결
+  2시즌=test, 직전 1시즌=valid, 그 이전=train인 forward-only 원칙을
+  우선한다. 실제 distinct 사건 수와 사전 정한 CI/power 정밀도가 부족하면
+  fold를 결과에 맞춰 합치지 않고 formal 평가를 보류한다.
+- KBO refit만 KBO train scaler를 사용한다. 고정 비교군은 **KBO-B4**
+  (pc_chronic, pc_acute_dev, days_since_last, month)와 **KBO-B7**이며,
+  둘 다 MLB와 같은 discrete-time hazard LR(L2, C=1, class_weight 없음,
+  s=0..4)를 첫 anchor로 쓴다. V9·prior_tjs 등 challenger는 각 데이터
+  gate 통과 후 valid에서만 선택해 untouched temporal test에 1회 적용한다.
+  penalty/feature/model grid를 추가하려면 결과를 보기 전 별도 사양으로
+  봉인한다.
+- **primary endpoint = 용량 정규화 budget에서 distinct 수술을 한 번만
+  세는 event-level recall**. pooled-window ROC/PR은 secondary이며,
+  event-weighted 양성 민감도와 outcome-independent 단일 관측(예: 투수-
+  시즌 첫 eligible decision) 민감도를 의무 보고한다. 투수-clustered
+  paired bootstrap·forward rolling을 유지한다.
+- formal 실행 전 label-blind event-count/power audit로 최소 fit/test 사건,
+  허용 CI 폭과 paired 채택 규칙을 먼저 문서화한다. 원칙은 paired CI가
+  0을 배제하거나 사전 고정 rolling 방향 규칙을 만족하는 경우뿐이며,
+  사건 부족 시 결과에 맞춰 기준을 낮추지 않는다.
+- calibration은 complete labels의 train/valid에서 **window P(H)** 기준으로
+  적합하고 test에서 intercept/slope/Brier를 확인한다. 공개 PU 단계에서는
+  하지 않는다.
+- MLB top-50·q20은 이식하지 않는다. 월 적격 투수의 top 5/10% 또는
+  구단당 n명처럼 운영 용량 정규화 budget curve를 보고, RP quota/별도
+  명단은 valid에서 1회 선택해 test에 고정한다.
+
+**K5/K6 — silent prospective → guarded internal pilot**:
+- K5: 결정일 전 cohort·state·score를 append-only로 해시·봉인하고 H90/
+  H150 성숙 전 변경하지 않는다. 첫 score 봉인 전에 최소 distinct 사건,
+  primary event-recall budget, 허용 CI, calibration·drift 기준을 포함한
+  go/no-go를 문서화하고, 통과 전에는 성능·배포 주장을 하지 않는다.
+- K6: 통과 시에만 제한된 내부 pilot. 의료·workload review의 보조 신호로
+  사용하고 진단·계약·방출·로스터 결정을 점수 하나로 내리지 않는다.
+  공개 실명 위험 명단은 만들지 않으며 접근통제·drift/calibration·오경보
+  모니터링을 포함한다. 대시보드는 이 단계 이후의 인터페이스다.
+
+**v2 사용자 결정 포인트**: ① K0의 공식 export/API·연구 이용 문의 허용
+여부 ② K0 이후 fixed 4–9 anchor와 season-aware challenger의 최종 지위
+③ 공개 case registry의 수동/허가된 반자동 방식 ④ 내부 협조 대상(KBO/
+KBOP vs 개별 구단) ⑤ 팀원 트랙과의 ID·산출물 경계. 현재 전부 미실행이다.
+
+### 2026-07-13 (계속 8) — 실행 전 중복 감사 + 연구 대시보드 배포 추가 (미실행)
+
+**명칭 정정**: 앞서 codex가 제안한 준비 단계 `R0–R2`는 저장소의 기존
+Phase 3 블록 `R1_ROLLING`·`R2_AGE`와 이름이 충돌했다. 기존 R1 rolling과
+R2 age는 이미 완료된 결과다. 아래 준비 작업은 **M0–M2**로 개명하며,
+Claude가 완료한 부분을 다시 실행하지 않는다.
+
+| 준비 단계 | 읽기 전용 감사 판정 | 남은 범위 |
+|---|---|---|
+| **M0 — 동결 기준점 봉인** | **완료** | `frozen_model_state.json` full-precision state, 2025/2026 score archive와 SHA-256가 commit `7e1f72e`에 포함됨. 입력 snapshot까지 묶은 단일 manifest는 선택 보강일 뿐 선행 작업이 아님. |
+| **M1 — 감사 지적 구현 보수** | **미완료** | A0는 문서 정정만 완료; 표준 calibration intercept/grouped-OOF final P(H)/outcome-independent landmark 산출물이 없음. A1은 q20 철회 결론만 정정; GS 중복 판별, safety 행·게이트, paired dPR 저장이 남음. A-IL은 문서 정정만 완료; 공개일·episode closure·post-TJS parser와 alert-time history/lead 보수 및 corrected CSV 재생성이 남음. |
+| **M2 — state-load 채점 경로** | **부분 완료** | state dump는 완료. 실제 scorer는 아직 train/TJS label을 읽어 scaler·LR·재보정을 다시 fit하고 파일을 덮어쓸 수 있음. 검증 loader, fit-free scorer, q0 출력, append-only writer/manifest, golden·leakage·overwrite 테스트가 남음. |
+
+M1은 **이미 동결한 MLB 성능을 다시 선택하거나 개선하는 실험이 아니라**,
+감사 결론을 재현 코드·CSV·본문까지 일치시키는 정합성 보수다. M2도 계수
+변경 없이 동결 state를 운영 경로에서 직접 사용하는 구현 보수다. 기존
+2025/2026 archive는 이력 보존을 위해 수정하지 않는다.
+
+**실행 순서와 ETA (사용자 `시작` 전 미실행)**:
+
+1. **M1 감사 보수·재검증 — 1–2일**: A0/A1/A-IL을 독립 패치하고 각
+   corrected artifact와 결정 메모를 생성한다. canonical q=0·TJS-only와
+   동결 계수는 변경하지 않는다.
+2. **M2 load-only scorer hardening — 0.5–1일**: state schema/hash 검증,
+   `fit()`·학습 라벨 의존이 없는 scorer, 결정일별 exclusive-create,
+   append-only manifest와 회귀 테스트를 완성한다.
+3. **D0 제한형 연구 대시보드 구현·배포 — 1–2일**: M1/M2 통과 후
+   MLB frozen archive와 retrospective demo를 입력으로 사용한다. 공식
+   제안서나 KBO 협조를 기다리지 않는 별도 연구 산출물이다.
+4. 이후 **K0 → K1-F/K1-L → K2-public**은 계획 v2대로 진행한다. 공개
+   데이터 단계에서는 성능 주장 없이 engineering/domain-shift만 감사한다.
+   complete internal label 이후의 K4–K6 운영 경로도 기존 게이트를 유지한다.
+
+**D0 대시보드 고정 범위**:
+
+- 결정일별 q=0 순위, 투수 검색, P90/P150, 표준화 feature 기여 분해,
+  역할 필터와 점수 읽는 법, model/data hash·snapshot 시점을 표시한다.
+- 대시보드는 versioned CSV/manifest를 **읽기만** 하며 모델 fitting·재보정·
+  데이터 다운로드를 하지 않는다. retrospective outcome은 명시적으로
+  분리된 demo view에서만 보인다.
+- 배포 산출물은 우선 **로컬 one-command + 접근 제한형 연구 인스턴스**다.
+  공개 실명 실시간 위험 명단은 만들지 않고, 절대확률 한계·sensitivity
+  envelope·불펜 coverage 한계를 화면에 고정한다. 외부 호스팅 계정·비용·
+  credential이 필요하면 실제 배포 직전에 사용자 승인을 받는다.
+- 수용 기준: frozen golden score/rank와 일치, feature 순서 오류 차단,
+  `game_date < t`, q=0 정책, 기존 snapshot 덮어쓰기 거부, 새 데이터 없이
+  재실행 시 동일 화면을 자동 검증한다.
+
+**KBO 연동 분리**: K1-F/K2-public 이후에는 익명·집계 중심의 engineering
+adapter만 D0에 연결할 수 있다. 투수 실명 운영 dashboard는 complete label로
+K4 locked 평가와 K5 silent prospective의 사전 go/no-go를 통과한 뒤 K6
+제한형 pilot에서만 연다. 따라서 **연구 대시보드 배포는 이번 연구 범위에
+포함**하되, 검증 전 KBO 위험 운영 배포로 해석하지 않는다.
+
+이 절 작성 시 프로젝트 스크립트·실험·다운로드는 실행하지 않았고 코드·
+데이터·설정도 수정하지 않았다. 실행은 사용자의 다음 `시작` 지시를 기다린다.
+
+### 2026-07-14 — M1/M2 실행·교차감사, K0 판정, D0 구현 완료
+
+사용자가 `시작`을 명시해 "계속 8"의 M1→M2→D0와 계획 v2의 read-only
+K0를 실행했다. 기존 MLB 동결 모델·계수·q=0 정책·TJS-only 라벨은
+변경하지 않았고, 기존 archive/legacy CSV도 덮어쓰지 않았다.
+
+**환경·독립 감사**
+
+- `.venv` 환경 검증은 정상 권한에서 **9/9 PASS**. 최초 sandbox 실행의
+  pybaseball cache 쓰기 1건 실패는 권한 격리 때문이었고, 승인된 동일
+  환경에서 실제 단일일 fetch까지 통과했다.
+- M1 세 블록은 각 구현자와 별도의 교차감사자가 재실행·대조했다. corrected
+  CSV/parquet는 저장본과 byte-identical했고, 시간 경계·selection·paired
+  CI·문서 수치를 독립 확인했다.
+- 교차감사에서 발견한 정합성 3건도 반영했다: opener 기술 기준 `<40`→
+  사전등록 `<30`, `A1_separate` 명칭을 실제 구현인 RP/non-RP로 정정,
+  corrected A-IL의 비채택 근거를 "blackout 방향 실패"가 아닌
+  result-informed parser 보수로 confirmatory 지위 상실+CI 0 포함으로 정정.
+
+**M1-A0 — PASS, canonical 불변**
+
+- `a0_recal.py`, `a0_sens.py`를 보수하고 legacy 산출물과 분리해
+  `a0_recal_corrected.csv`, `a0_recal_oof_window.csv`,
+  `a0_sens_corrected.csv`를 생성했다.
+- 투수-grouped 5-fold OOF 최종 P(H): n=16,949, 투수 1,029명,
+  양성 window 173/252. mean error −0.000170/−0.000161, 표준 fixed-slope
+  calibration intercept +0.0170/+0.0111이나 joint slope 0.2658/0.5683.
+  평균 일치나 interval 재보정만으로 window calibration을 주장할 수 없다.
+- mature test raw 표준 절편 +0.363/+0.308, joint slope 1.940/1.962,
+  ROC 0.7009/0.6958. 절대확률 인용 금지는 유지한다.
+- outcome-blind `(투수, 달력연도)` 첫 적격 decision 규칙은 fit-only
+  0.6225/0.6250, 같은 first-landmark 평가집합에서 0.5642/0.5850
+  (canonical fit 0.6495/0.6435). 역사적 −0.104는 계속
+  outcome-dependent stress로만 남긴다.
+
+**M1-A1 — PASS, q=0 유지**
+
+- actual first-pitch GS v2: 2016–2025 정규시즌 **22,764/22,764경기 모두
+  정확히 2 GS**, 예외 0. legacy v1의 mid-at-bat 거짓 GS 6행은 별도
+  diff로 보존했다.
+- q20은 primary H90/H150과 safety H90 local gate는 통과하지만 safety
+  H150에서 **16→12, RP 0→2, 총 손실 4**로 실패한다. 최종
+  `adopt=False`, `canonical_q=0`; q5 전 셀 +1은 사후 탐색이다.
+- separate paired dPR 네 셀 모두 저장했고 CI가 모두 0 포함한다. 실제
+  구현은 RP vs non-RP이며 사전등록 shorthand "SP/RP"와의 편차를
+  명시했다. descriptive opener/bulk는 등록 기준 GS당 `<30구`에서도 0건.
+- 정본: `a1_bullpen_corrected.csv`, `gs_flags_v2.parquet`, GS sanity/
+  exception/v1-v2 diff CSV. 기존 v1과 `a1_bullpen.csv`는 보존했다.
+
+**M1 A-IL — 계산 PASS, canonical 미채택 유지(근거 정정)**
+
+- 공개 disclosure date를 보존하고 placement/transfer/activation 모두에
+  60일 gap을 일관 적용했다. 13,827 actions→6,816 episodes; activation
+  4,101, gap-timeout 2,031, right-censored 684. 완료 procedure ontology와
+  미래 의도·비팔꿈치 UCL false-positive 회귀검사를 통과했다.
+- corrected 전체 dROC는 +0.06862/+0.04453, blackout 60일은
+  **+0.00577/+0.00232**이나 CI [−0.02787,+0.04803]/
+  [−0.02067,+0.02990]로 모두 0 포함. 첫 caught alert→수술 lead 중앙값은
+  36/37일이다.
+- 중요한 판정 정정: 위 60일 점추정은 과거 방향-only 조건을 기계적으로
+  통과하므로 "blackout gate 실패"라고 부르지 않는다. 그러나 parser
+  정의는 결과를 확인한 뒤 감사에서 보수돼 confirmatory 지위를 잃었고,
+  독립적 효과의 CI도 0 포함한다. 따라서 **소급 채택하지 않고 새 고정
+  parser/독립 자료에서 재검정할 triage 후보**로 유지한다.
+- 정본: `il_episodes_asof_v2.parquet`, `ail_results_asof_v2.csv`,
+  `ail_alert_events_asof_v2.csv`. legacy 파일은 보존했다.
+
+**M2 — PASS, fit-free frozen scorer 완성**
+
+- `frozen_state.py` loader가 canonical SHA-256 `e14ba800...`, schema,
+  feature 순서, 벡터·유한값·scale을 검증한다. NumPy equation만 사용하며
+  미래 CLI는 학습 cohort/TJS label/scikit-learn/`fit()`에 의존하지 않는다.
+- strict `game_date < t`, actual first-pitch GS, q=0 top-50, raw/recal
+  P90/P150, feature contribution을 출력한다. 순서 좌표 결측·exact tie·
+  경기당 starter≠2는 score 전에 실패한다.
+- score CSV+manifest는 exclusive-create이며 state/input/output SHA와
+  as-of metadata를 함께 저장한다. 기존 archive는 변경하지 않았다.
+- 테스트 **9/9 PASS**. 2026-04~07 delayed-shadow 2,654/2,654행에서 네
+  확률열 atol 5e-8, rank 전 행 일치; feature 순서 drift, 당일 경기 누출,
+  q0, overwrite, first-pitch tie를 각각 실패/차단했다.
+
+**D0 — 로컬 production 산출물 PASS, 원격 publish만 대기**
+
+- `dashboard/`에 retrospective demo 전용 vinext Sites 앱을 구현했다.
+  q=0 순위·P90/P150·기여 분해·검색·역할·결과 분리·model/data hash와
+  절대확률/비임상 경고를 제공한다. 현재 실명 전향 위험 명단, fitting,
+  재보정, 다운로드 기능은 없다.
+- `demo_test_top20.csv`는 원본과 byte-identical(SHA-256 `d2f68cd3...`),
+  manifest에 frozen state와 asset hash를 고정했다. production build,
+  lint, server-render/data identity 테스트 **2/2 PASS**. patched PostCSS로
+  `npm audit --omit=dev` production 취약점 **0건**; 개발 도구 audit 9건은
+  런타임 비포함이며 강제 major fix를 적용하지 않았다.
+- 외부 Sites publish는 아직 수행하지 않았다. Sites는 pushed source의
+  commit SHA를 요구하지만 프로젝트 규칙상 git commit/push는 사용자가
+  직접 한다. source commit/push 뒤 owner-only 접근으로 저장·배포하는
+  마지막 단계만 남는다. 빈 site를 미리 만들지는 않았다.
+
+**K0 — `PARTIAL`; K1 자동수집 `NO-GO`**
+
+- 공식 KBO 퓨처스 실제 박스스코어의 날짜·선발/구원·투구수와 URL의
+  gameId, 선수 페이지의 playerId/등판 역할을 수동 확인했다. B7 원자료의
+  기술 가능성은 있으나 1군 다년 coverage·ID 계약·historical risk-set
+  replay는 미확인이다.
+- 2025 TrackMan 공식 구속 일원화는 측정체계 사실만 PASS. 공개 structured
+  daily velocity가 없어 V9 공개 경로는 FAIL이다.
+- 공식 export/API 또는 연구 bulk 저장·파생물 재배포 허가를 확인하지
+  못했고 약관은 사전승낙 범위를 둔다. 공개 열람은 자동수집 권리가
+  아니므로 **K1-F scraper/비공식 API/대량 다운로드를 시작하지 않았다.**
+- 공개 UCLR/TJS 기사는 A/B/C evidence registry 후보일 뿐 PU다.
+  `unknown != negative`; 공개 자료만으로 refit·ROC/PR·calibration은 금지.
+- 다음 KBO 순서는 권리 확보→소수 경기 schema/completeness pilot→B7-only
+  여부 재심사다. 상세 정본은 `results/kbo/K0_FEASIBILITY.md`.
+
+**남은 승인·시점 작업**
+
+1. 사용자가 dashboard source를 commit/push한 뒤 D0 owner-only Sites
+   production publish를 완료한다.
+2. KBO 공식 export/API/서면 허가 없이는 K1을 열지 않는다. 허가가 생기면
+   전기간 수집이 아니라 소규모 schema/completeness pilot부터 별도 승인한다.
+3. 2026-08-01 첫 진짜 전향 cohort는 **8/1 당일 이전** 최신 raw snapshot으로
+   M2 CLI를 실행·해시·봉인한다. 현재 7/12 snapshot으로 미리 만들지 않았다.

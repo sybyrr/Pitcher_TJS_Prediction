@@ -1,6 +1,6 @@
-"""A1 bullpen mini-block (spec v2, plan_progress "2026-07-13 (계속 3)").
+"""A1 bullpen mini-block, corrected M1 audit artifact.
 
-1. Role at t (modeling, 3-way) from gs_flags_v1 trailing 365d GS share:
+1. Role at t (modeling, 3-way) from corrected gs_flags_v2 trailing 365d GS share:
    SP >= 0.5, RP <= 0.2, else swing. 5-way split is DESCRIPTIVE ONLY.
 2. RP-timescale features, exactly 6 (registered): pitches_7d, pitches_14d,
    appearances_14d, b2b_count_30d, three_in_four_count_30d, last_outing_spike
@@ -8,16 +8,20 @@
 3. Cohen 2022 single pre-registered test: M_sa + {rp_flag, relx_slope,
    relx_slope x rp, relx_missing}; slope = 1-3yr trend of handedness-
    normalized game release_pos_x (>=10 games spanning >=180d, else missing).
-4. Models vs M_sa binary baseline (paired, shared resamples, mature test
-   t+H<=2024-12-31; H150 primary for adoption): pooled(+6) /
-   role-interaction(+rp+6+6xrp) / SP-RP separate (ridge C=0.1).
+4. Models vs M_sa binary baseline (paired, shared resamples, both primary
+   t+H<=2024-12-31 and safety t+H<=2024-06-30): pooled(+6) /
+   role-interaction(+rp+6+6xrp) / RP-vs-non-RP separate (ridge C=0.1).
 5. Alert quota stable-region rule: RP-reserved q in {0,5,10,15,20} of 50,
    pre-test rolling folds Y in {2019, 2021} (fit years < Y; 2020 skipped,
    short season); pick max q with total-event loss <=1 vs q=0 in EVERY fold;
    fold disagreement -> smaller q. Apply once to mature test with canonical
    hazard scores; adopt iff RP capture up AND total recall loss <= 2 events.
+   The mandatory safety H150 gate decides the final policy: q=20 remains a
+   challenger and canonical alerts remain pure top-50 (q=0). q=5 is a
+   post-hoc exploratory row only.
 Gates: M_sa binary H90 mature ROC == 0.69203 (full 22-24 anchor; H90 mask
-equals full test), hazard mature 0.7009/0.6958 (v_codex). Output ../a1_bullpen.csv.
+equals full test). Output ../a1_bullpen_corrected.csv; the original CSV is
+retained unchanged as historical evidence.
 """
 from __future__ import annotations
 import time
@@ -28,8 +32,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-ROOT = Path("d:/PAINS/Pitcher_TJS_Prediction")
+ROOT = Path(__file__).resolve().parents[3]
 OUT = Path(__file__).resolve().parent.parent
+RESULT_OUT = OUT / "a1_bullpen_corrected.csv"
 t0 = time.time()
 
 cohort = pd.read_parquet(ROOT / "data/prospective/cohort_v4.parquet").sort_values(["t", "pitcher"]).reset_index(drop=True)
@@ -56,7 +61,7 @@ for pid, g in gf.groupby("pitcher", sort=False):
     role_by_pid[int(pid)] = (g["game_date"].values.astype("datetime64[D]"),
                              g["total_pitches"].astype("float64").values,
                              g["relx_game"].astype("float64").values)
-gs = pd.read_parquet(ROOT / "data/prospective/gs_flags_v1.parquet").sort_values(["pitcher", "game_date"]).reset_index(drop=True)
+gs = pd.read_parquet(ROOT / "data/prospective/gs_flags_v2.parquet").sort_values(["pitcher", "game_date"]).reset_index(drop=True)
 gs_by_pid = {}
 for pid, g in gs.groupby("pitcher", sort=False):
     gs_by_pid[int(pid)] = (g["game_date"].values.astype("datetime64[D]"),
@@ -167,7 +172,7 @@ print(f"[t={time.time()-t0:.0f}s] features built {F.shape}")
 # descriptive 5-way (report only): starter / opener-bulk / swing / long RP / short RP
 five = np.where(gs_share <= 0.2,
                 np.where(mean_pc_app >= 25, "longRP", "shortRP"),
-                np.where((gs_share > 0.2) & (mean_pc_gs < 40), "opener_bulk",
+                np.where((gs_share > 0.2) & (mean_pc_gs < 30), "opener_bulk",
                          np.where(gs_share >= 0.5, "starter", "swing")))
 fold = cohort["fold_main"].values
 te_desc = (fold == "test") & (year_all <= 2024)
@@ -175,9 +180,16 @@ print("5-way role distribution (test 22-24, descriptive):")
 print(pd.crosstab(five[te_desc], role3[te_desc]).to_string())
 
 fit_mask = (fold == "train") | (fold == "valid")
-REL_END = np.datetime64("2024-12-31")
 te_base = (fold == "test") & (year_all <= 2024)
-mature = {H: te_base & ((t_all + np.timedelta64(H, "D")) <= REL_END) for H in (90, 150)}
+BOUNDARY_ENDS = {
+    "primary": np.datetime64("2024-12-31"),
+    "safety": np.datetime64("2024-06-30"),
+}
+mature = {
+    (boundary, H): te_base & ((t_all + np.timedelta64(H, "D")) <= cutoff)
+    for boundary, cutoff in BOUNDARY_ENDS.items()
+    for H in (90, 150)
+}
 
 def build_resamples(pids, seed=0, nboot=1000):
     uniq = np.unique(pids)
@@ -209,9 +221,9 @@ def fit_predict(cols, H, mask_fit, mask_pred, C=1.0):
     clf.fit(sc.transform(F.loc[mask_fit, cols]), y[mask_fit])
     return clf.predict_proba(sc.transform(F.loc[mask_pred, cols]))[:, 1]
 
-# gate: M_sa binary on H90 mature mask (== full 22-24 test) reproduces anchor
-p_gate = fit_predict(M_SA, 90, fit_mask, mature[90])
-y_gate = cohort["label_H90_B0"].values.astype(int)[mature[90]]
+# Gate: the primary M_sa binary H90 mask reproduces the registered anchor.
+p_gate = fit_predict(M_SA, 90, fit_mask, mature[("primary", 90)])
+y_gate = cohort["label_H90_B0"].values.astype(int)[mature[("primary", 90)]]
 roc_gate = roc_auc_score(y_gate, p_gate)
 assert abs(roc_gate - 0.69203) < 1e-3, roc_gate
 print(f"GATE M_sa binary H90 mature ROC {roc_gate:.5f} == anchor 0.69203 : OK")
@@ -222,54 +234,143 @@ VARIANTS = [
     ("Cohen_relx", M_SA + ["rp_flag", "relx_slope", "relx_x_rp", "relx_missing"], 1.0),
 ]
 out = []
-res_cache = {}
-base_probs = {}
-for H in (90, 150):
-    m = mature[H]
-    y_m = cohort[f"label_H{H}_B0"].values.astype(int)[m]
-    res = build_resamples(pid_all[m])
-    res_cache[H] = (m, y_m, res)
-    p0 = fit_predict(M_SA, H, fit_mask, m)
-    base_probs[H] = p0
-    rp_m = F.loc[m, "rp_flag"].values == 1
-    print(f"\nH={H}: baseline M_sa ROC {roc_auc_score(y_m, p0):.4f}  "
-          f"RP-within {roc_auc_score(y_m[rp_m], p0[rp_m]):.4f} (RP win-pos {int(y_m[rp_m].sum())})")
-    for name, cols, C in VARIANTS:
-        p1 = fit_predict(cols, H, fit_mask, m, C=C)
-        ra, rb, pa, pb = paired(y_m, p0, p1, res)
-        dr = rb - ra; dp = pb - pa
-        drlo, drhi = ci(dr); dplo, dphi = ci(dp)
-        fl = ("  dROC-EXCL0" if excl0(drlo, drhi) else "") + ("  dPR-EXCL0" if excl0(dplo, dphi) else "")
-        rocv = roc_auc_score(y_m, p1)
-        rp_roc = roc_auc_score(y_m[rp_m], p1[rp_m])
-        out.append(dict(block="model", H=H, variant=name, roc=round(rocv, 4),
-                        droc=round(float(np.median(dr)), 5), droc_lo=round(drlo, 5), droc_hi=round(drhi, 5),
-                        dpr=round(float(np.median(dp)), 5), dpr_lo=round(dplo, 5), dpr_hi=round(dphi, 5),
-                        rp_within=round(rp_roc, 4)))
-        print(f"  {name:15s} ROC {rocv:.4f}  dROC {np.median(dr):+.5f} [{drlo:+.5f},{drhi:+.5f}]  "
-              f"RP-within {rp_roc:.4f}{fl}")
-    # separate SP+swing / RP models (ridge C=0.1), stitched probabilities
-    p_sep = np.empty(int(m.sum()))
-    rp_all = F["rp_flag"].values == 1
-    for grp, gmask_all in (("RP", rp_all), ("nonRP", ~rp_all)):
-        fit_g = fit_mask & gmask_all
-        pred_rows = np.where(m)[0]
-        sel = gmask_all[pred_rows]
-        y = cohort[f"label_H{H}_B0"].values.astype(int)
-        sc = StandardScaler().fit(F.loc[fit_g, M_SA + RP6_COLS])
-        clf = LogisticRegression(class_weight="balanced", max_iter=2000, C=0.1)
-        clf.fit(sc.transform(F.loc[fit_g, M_SA + RP6_COLS]), y[fit_g])
-        p_sep[sel] = clf.predict_proba(sc.transform(F.loc[m, M_SA + RP6_COLS].iloc[sel]))[:, 1]
-    ra, rb, pa, pb = paired(y_m, p0, p_sep, res)
-    dr = rb - ra
-    drlo, drhi = ci(dr)
-    rp_roc = roc_auc_score(y_m[rp_m], p_sep[rp_m])
-    out.append(dict(block="model", H=H, variant="A1_separate", roc=round(roc_auc_score(y_m, p_sep), 4),
-                    droc=round(float(np.median(dr)), 5), droc_lo=round(drlo, 5), droc_hi=round(drhi, 5),
-                    dpr=np.nan, dpr_lo=np.nan, dpr_hi=np.nan, rp_within=round(rp_roc, 4)))
-    print(f"  {'A1_separate':15s} ROC {roc_auc_score(y_m, p_sep):.4f}  dROC {np.median(dr):+.5f} "
-          f"[{drlo:+.5f},{drhi:+.5f}]  RP-within {rp_roc:.4f}"
-          + ("  dROC-EXCL0" if excl0(drlo, drhi) else ""))
+for boundary, cutoff in BOUNDARY_ENDS.items():
+    for H in (90, 150):
+        m = mature[(boundary, H)]
+        y_m = cohort[f"label_H{H}_B0"].values.astype(int)[m]
+        res = build_resamples(pid_all[m])
+        p0 = fit_predict(M_SA, H, fit_mask, m)
+        rp_m = F.loc[m, "rp_flag"].values == 1
+        base_roc = roc_auc_score(y_m, p0)
+        base_pr = average_precision_score(y_m, p0)
+        base_rp_roc = roc_auc_score(y_m[rp_m], p0[rp_m])
+        out.append(
+            dict(
+                artifact_version="M1_corrected_20260714",
+                block="model",
+                boundary=boundary,
+                cutoff=str(pd.Timestamp(cutoff).date()),
+                H=H,
+                variant="M_sa_binary_baseline",
+                exploratory=False,
+                canonical=False,
+                roc=round(base_roc, 5),
+                pr_auc=round(base_pr, 5),
+                droc=0.0,
+                droc_lo=0.0,
+                droc_hi=0.0,
+                dpr=0.0,
+                dpr_lo=0.0,
+                dpr_hi=0.0,
+                rp_within=round(base_rp_roc, 5),
+                n_rows=int(m.sum()),
+                n_positive=int(y_m.sum()),
+                anchor_gate_pass=(boundary == "primary" and H == 90),
+            )
+        )
+        print(
+            f"\n{boundary} H={H}: baseline M_sa ROC {base_roc:.4f}  "
+            f"RP-within {base_rp_roc:.4f} (RP win-pos {int(y_m[rp_m].sum())})"
+        )
+        for name, cols, C in VARIANTS:
+            p1 = fit_predict(cols, H, fit_mask, m, C=C)
+            ra, rb, pa, pb = paired(y_m, p0, p1, res)
+            dr = rb - ra
+            dp = pb - pa
+            drlo, drhi = ci(dr)
+            dplo, dphi = ci(dp)
+            fl = ("  dROC-EXCL0" if excl0(drlo, drhi) else "") + (
+                "  dPR-EXCL0" if excl0(dplo, dphi) else ""
+            )
+            rocv = roc_auc_score(y_m, p1)
+            prv = average_precision_score(y_m, p1)
+            rp_roc = roc_auc_score(y_m[rp_m], p1[rp_m])
+            out.append(
+                dict(
+                    artifact_version="M1_corrected_20260714",
+                    block="model",
+                    boundary=boundary,
+                    cutoff=str(pd.Timestamp(cutoff).date()),
+                    H=H,
+                    variant=name,
+                    exploratory=False,
+                    canonical=False,
+                    roc=round(rocv, 5),
+                    pr_auc=round(prv, 5),
+                    droc=round(float(np.median(dr)), 5),
+                    droc_lo=round(drlo, 5),
+                    droc_hi=round(drhi, 5),
+                    dpr=round(float(np.median(dp)), 5),
+                    dpr_lo=round(dplo, 5),
+                    dpr_hi=round(dphi, 5),
+                    rp_within=round(rp_roc, 5),
+                    n_rows=int(m.sum()),
+                    n_positive=int(y_m.sum()),
+                    anchor_gate_pass=False,
+                )
+            )
+            print(
+                f"  {name:15s} ROC {rocv:.4f}  "
+                f"dROC {np.median(dr):+.5f} [{drlo:+.5f},{drhi:+.5f}]  "
+                f"dPR {np.median(dp):+.5f} [{dplo:+.5f},{dphi:+.5f}]  "
+                f"RP-within {rp_roc:.4f}{fl}"
+            )
+
+        # Separate RP and non-RP ridge models; the paired PR delta is retained
+        # exactly like every other variant (the historical CSV left it blank).
+        p_sep = np.empty(int(m.sum()))
+        rp_all = F["rp_flag"].values == 1
+        for gmask_all in (rp_all, ~rp_all):
+            fit_g = fit_mask & gmask_all
+            pred_rows = np.where(m)[0]
+            sel = gmask_all[pred_rows]
+            y = cohort[f"label_H{H}_B0"].values.astype(int)
+            sc = StandardScaler().fit(F.loc[fit_g, M_SA + RP6_COLS])
+            clf = LogisticRegression(class_weight="balanced", max_iter=2000, C=0.1)
+            clf.fit(sc.transform(F.loc[fit_g, M_SA + RP6_COLS]), y[fit_g])
+            p_sep[sel] = clf.predict_proba(
+                sc.transform(F.loc[m, M_SA + RP6_COLS].iloc[sel])
+            )[:, 1]
+        ra, rb, pa, pb = paired(y_m, p0, p_sep, res)
+        dr = rb - ra
+        dp = pb - pa
+        drlo, drhi = ci(dr)
+        dplo, dphi = ci(dp)
+        sep_roc = roc_auc_score(y_m, p_sep)
+        sep_pr = average_precision_score(y_m, p_sep)
+        rp_roc = roc_auc_score(y_m[rp_m], p_sep[rp_m])
+        out.append(
+            dict(
+                artifact_version="M1_corrected_20260714",
+                block="model",
+                boundary=boundary,
+                cutoff=str(pd.Timestamp(cutoff).date()),
+                H=H,
+                variant="A1_separate",
+                exploratory=False,
+                canonical=False,
+                roc=round(sep_roc, 5),
+                pr_auc=round(sep_pr, 5),
+                droc=round(float(np.median(dr)), 5),
+                droc_lo=round(drlo, 5),
+                droc_hi=round(drhi, 5),
+                dpr=round(float(np.median(dp)), 5),
+                dpr_lo=round(dplo, 5),
+                dpr_hi=round(dphi, 5),
+                rp_within=round(rp_roc, 5),
+                n_rows=int(m.sum()),
+                n_positive=int(y_m.sum()),
+                anchor_gate_pass=False,
+            )
+        )
+        print(
+            f"  {'A1_separate':15s} ROC {sep_roc:.4f}  "
+            f"dROC {np.median(dr):+.5f} [{drlo:+.5f},{drhi:+.5f}]  "
+            f"dPR {np.median(dp):+.5f} [{dplo:+.5f},{dphi:+.5f}]  "
+            f"RP-within {rp_roc:.4f}"
+            + ("  dROC-EXCL0" if excl0(drlo, drhi) else "")
+            + ("  dPR-EXCL0" if excl0(dplo, dphi) else "")
+        )
 
 # ---------------- quota stable-region (canonical hazard scores) ----------------
 S_MAX = 5
@@ -319,7 +420,8 @@ def quota_recall(mask, p, q, budget=50):
         sel = np.where(t_m == d)[0]
         order = sel[np.argsort(-p[sel], kind="stable")]
         rp_top = [r for r in order if is_rp[r]][:q]
-        rest = [r for r in order if r not in set(rp_top)][:budget - len(rp_top)]
+        reserved = set(rp_top)
+        rest = [r for r in order if r not in reserved][:budget - len(rp_top)]
         flag[rp_top] = True; flag[rest] = True
     return flag
 
@@ -344,7 +446,7 @@ for Y in (2019, 2021):
     my = year_all == Y
     p = hazard_p(hz_y, my)[150]
     groups, ev_role = event_table(my, 150)
-    base_caught = None
+    fold_results = {}
     line = f"  Y={Y} events {len(groups)}:"
     for q in QGRID:
         fl = quota_recall(my, p, q)
@@ -352,39 +454,143 @@ for Y in (2019, 2021):
         tot = sum(caught.values())
         rp_c = sum(1 for k, c in caught.items() if c and ev_role[k] == "RP")
         rp_t = sum(1 for k in groups if ev_role[k] == "RP")
-        if q == 0:
-            base_caught = tot
-        if base_caught - tot > 1:
-            fold_ok[q] = False
+        fold_results[q] = (tot, rp_c, rp_t)
         line += f"  q={q}: {tot}({rp_c}/{rp_t}RP)"
+    base_caught = fold_results[0][0]
+    for q in QGRID:
+        tot, rp_c, rp_t = fold_results[q]
+        fold_gate_pass = base_caught - tot <= 1
+        fold_ok[q] = fold_ok[q] and fold_gate_pass
+        out.append(
+            dict(
+                artifact_version="M1_corrected_20260714",
+                block="quota_selection",
+                boundary=f"rolling_{Y}",
+                cutoff="",
+                H=150,
+                variant=f"q{q}",
+                q=q,
+                exploratory=False,
+                canonical=False,
+                total_caught=tot,
+                rp_caught=rp_c,
+                rp_events=rp_t,
+                n_events=len(groups),
+                gate_total_loss=base_caught - tot,
+                gate_pass=fold_gate_pass,
+                adopt=False,
+                policy_status="pretest_selection",
+            )
+        )
     print(line)
 q_star = max([q for q in QGRID if fold_ok[q]], default=0)
 print(f"  stable-region choice q* = {q_star}")
 
-print("\nQuota test application (canonical hazard, mature test):")
+print("\nQuota test application (canonical hazard, primary + safety):")
 canon = fit_hazard(fit_mask)
-for H in (90, 150):
-    m = mature[H]
-    p = hazard_p(canon, m)[H]
-    groups, ev_role = event_table(m, H)
-    res_line = {}
-    for q in (0, q_star):
-        fl = quota_recall(m, p, q)
-        caught = {k: any(fl[r] for r in rws) for k, rws in groups.items()}
-        tot = sum(caught.values())
-        rp_c = sum(1 for k, c in caught.items() if c and ev_role[k] == "RP")
-        rp_t = sum(1 for k in groups if ev_role[k] == "RP")
-        res_line[q] = (tot, rp_c, rp_t)
-        out.append(dict(block="quota", H=H, variant=f"q{q}", roc=np.nan,
-                        droc=np.nan, droc_lo=np.nan, droc_hi=np.nan,
-                        dpr=np.nan, dpr_lo=np.nan, dpr_hi=np.nan,
-                        rp_within=np.nan, total_caught=tot, rp_caught=rp_c,
-                        rp_events=rp_t, n_events=len(groups)))
-    t0_, r0_, rt = res_line[0]
-    t1_, r1_, _ = res_line[q_star]
-    adopt = (r1_ > r0_) and (t0_ - t1_ <= 2)
-    print(f"  H={H}: q=0 total {t0_}/{len(groups)} RP {r0_}/{rt}  ->  q={q_star} total {t1_} RP {r1_}  "
-          f"adopt={'YES' if adopt else 'NO'}")
+quota_results = {}
+for boundary, cutoff in BOUNDARY_ENDS.items():
+    for H in (90, 150):
+        m = mature[(boundary, H)]
+        p = hazard_p(canon, m)[H]
+        groups, ev_role = event_table(m, H)
+        for q in sorted({0, 5, q_star}):
+            fl = quota_recall(m, p, q)
+            caught = {k: any(fl[r] for r in rws) for k, rws in groups.items()}
+            tot = sum(caught.values())
+            rp_c = sum(1 for k, c in caught.items() if c and ev_role[k] == "RP")
+            rp_t = sum(1 for k in groups if ev_role[k] == "RP")
+            quota_results[(boundary, H, q)] = (tot, rp_c, rp_t, len(groups))
 
-pd.DataFrame(out).to_csv(OUT / "a1_bullpen.csv", index=False)
-print(f"\n[t={time.time()-t0:.0f}s] wrote {OUT / 'a1_bullpen.csv'}")
+        t0_, r0_, rt, n_events = quota_results[(boundary, H, 0)]
+        tq_, rq_, _, _ = quota_results[(boundary, H, q_star)]
+        local_gate = (rq_ > r0_) and (t0_ - tq_ <= 2)
+        print(
+            f"  {boundary} H={H}: q=0 {t0_}/{n_events} RP {r0_}/{rt}  ->  "
+            f"q={q_star} {tq_} RP {rq_}; local_gate={'PASS' if local_gate else 'FAIL'}"
+        )
+
+# H150 is the pre-registered adoption endpoint. Both the primary and mandatory
+# safety boundary must pass; safety H150 fails, so q=20 cannot be canonical.
+candidate_adopt = all(
+    (
+        quota_results[(boundary, 150, q_star)][1]
+        > quota_results[(boundary, 150, 0)][1]
+    )
+    and (
+        quota_results[(boundary, 150, 0)][0]
+        - quota_results[(boundary, 150, q_star)][0]
+        <= 2
+    )
+    for boundary in BOUNDARY_ENDS
+)
+canonical_q = q_star if candidate_adopt else 0
+assert canonical_q == 0, "M1 correction requires q=0 after safety H150 failure"
+
+for boundary, cutoff in BOUNDARY_ENDS.items():
+    for H in (90, 150):
+        base_tot, base_rp, _, _ = quota_results[(boundary, H, 0)]
+        for q in sorted({0, 5, q_star}):
+            tot, rp_c, rp_t, n_events = quota_results[(boundary, H, q)]
+            is_baseline = q == 0
+            is_posthoc = q == 5 and q != q_star
+            gate_rp_gain = np.nan if is_baseline else rp_c - base_rp
+            gate_total_loss = np.nan if is_baseline else base_tot - tot
+            gate_pass = (
+                np.nan
+                if is_baseline
+                else bool((rp_c > base_rp) and (base_tot - tot <= 2))
+            )
+            if is_baseline:
+                status = "canonical_q0"
+            elif is_posthoc:
+                status = "posthoc_exploratory"
+            else:
+                status = "challenger_safety_H150_failed"
+            out.append(
+                dict(
+                    artifact_version="M1_corrected_20260714",
+                    block="quota_test",
+                    boundary=boundary,
+                    cutoff=str(pd.Timestamp(cutoff).date()),
+                    H=H,
+                    variant=f"q{q}",
+                    q=q,
+                    exploratory=is_posthoc,
+                    canonical=is_baseline,
+                    total_caught=tot,
+                    rp_caught=rp_c,
+                    rp_events=rp_t,
+                    n_events=n_events,
+                    gate_rp_gain=gate_rp_gain,
+                    gate_total_loss=gate_total_loss,
+                    gate_pass=gate_pass,
+                    adopt=bool(q == q_star and candidate_adopt),
+                    policy_status=status,
+                )
+            )
+
+out.append(
+    dict(
+        artifact_version="M1_corrected_20260714",
+        block="policy_decision",
+        boundary="primary+safety",
+        cutoff="2024-12-31|2024-06-30",
+        H=150,
+        variant=f"q{q_star}_vs_q0",
+        q=q_star,
+        exploratory=False,
+        canonical=False,
+        gate_pass=candidate_adopt,
+        adopt=False,
+        canonical_q=canonical_q,
+        policy_status="q20_challenger; canonical_q0; safety_H150_failed",
+    )
+)
+
+result = pd.DataFrame(out)
+result.to_csv(RESULT_OUT, index=False)
+print(
+    f"policy decision: q*={q_star}, adopt={candidate_adopt}, canonical=q{canonical_q}"
+)
+print(f"\n[t={time.time()-t0:.0f}s] wrote {RESULT_OUT}")

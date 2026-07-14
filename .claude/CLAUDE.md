@@ -25,7 +25,7 @@ MLB 투수의 Tommy John Surgery 위험을 경기 데이터로 예측한 Kang et
 3. **G3 KBO 이전 [진행]**: 현재까지 데이터만으로 계산 가능한 전향 위험
    지표(순위+근거). 이전 대상은 방법론·파이프라인, **계수는 KBO 재적합**.
 
-## 현재 상태 (2026-07-13)
+## 현재 상태 (2026-07-14)
 
 - **Phase 1 [완료]**: Kang 분류·회귀·SHAP 완전 재현 → `results/`.
 - **Phase 2/2.5/2.6 [완료]**: 논문 수치 해체(회귀=개인 내 보간, 분류 ~0.11
@@ -36,7 +36,8 @@ MLB 투수의 Tommy John Surgery 위험을 경기 데이터로 예측한 Kang et
   동결** 완료. canonical = **H90 0.701 / H150 0.696 (조건부 backtest;
   safety 0.660/0.665 병기, ~0.60-0.70은 sensitivity envelope 표기)**.
   경보 canonical = **q=0 top-50** (q=20 RP 예약은 safety H150 게이트
-  실패로 challenger 강등). A-IL 미채택(triage 재검정 후보). **동결
+  실패로 challenger 강등). A-IL은 corrected 60d 방향 양/양이나 결과 확인
+  후 parser 보수+CI 0 포함이라 미채택(triage 재검정 후보). **동결
   정본: `results/phase3/FROZEN_MODEL.md` + `frozen_model_state.json`
   (SHA-256 기록)**. 이후 MLB 모델 변경 금지.
 - **2026 채점(다운로드 승인, 3/1-7/12 스냅샷)**: 4-7월 결정일 채점은
@@ -44,8 +45,29 @@ MLB 투수의 Tommy John Surgery 위험을 경기 데이터로 예측한 Kang et
   재분류). **첫 진짜 전향 = 2026-08-01을 당일 이전 채점·해시·저장**
   (frozen state 로드, append-only, 사용자 git commit으로 증빙).
 - **대기**: 제안서(사용자 직접 작성 — 재료: phase2_results 블록 6-9 +
-  FROZEN_MODEL.md + `PROJECT_RETROSPECTIVE.md`); KBO 이전 패키지(계수·
-  quota 재적합 전제); 2026-08-01 사전 채점(8/1 전 실행 필요).
+  FROZEN_MODEL.md + `progress_MLB.md`); KBO 이전 패키지(계수·quota
+  재적합 전제); **2026-08-01 사전 채점(8/1 전 실행 필요)**; 봉인 파일
+  git 커밋(사용자); D0 source commit/push 뒤 owner-only Sites publish.
+- **M1/M2 [완료·교차감사 PASS]**: A0/A1/A-IL corrected 코드·CSV/parquet를
+  독립 재실행까지 일치시켰다. actual first-pitch GS 22,764/22,764 경기
+  정확히 2, q20 safety H150 실패로 q0 유지. M2 fit/label-free state loader,
+  append-only manifest와 테스트 9/9 완료; 2026 archive 2,654행 일치.
+- **K0 [PARTIAL], K1 자동수집 [NO-GO]**: 공식 boxscore의 B7 가능성은
+  확인했지만 1군 장기 coverage·ID/risk-set 완전성과 공식 export/API·연구
+  bulk 허가가 없다. 공개 daily velocity가 없어 V9 FAIL. 공개 뉴스는 PU
+  registry로만 사용하고 재적합·ROC·보정은 금지. 권리 확보 후 소수 B7
+  schema/completeness pilot부터 재심사한다.
+- **KBO 이전 계획 v2 [K0 판정 반영·K1 대기]**: 공개 단계는 허가된
+  B7 exposure 파이프라인+case-series 기술 감사, complete internal
+  UCLR/TJS 라벨 확보 후에만 KBO refit/locked test, 그 뒤 silent
+  prospective→guarded pilot. canonical 사양은 `plan_progress.md`
+  "2026-07-13 (계속 7)".
+- **dashboard D0 [구현·로컬 production PASS]**: `dashboard/`는 MLB
+  retrospective demo만 읽으며 q0 순위·P90/P150·기여·검색·역할·hash와
+  비임상/절대확률 경고를 제공한다. fitting·다운로드·현재 실명 전향
+  명단은 없다. lint/build/server-render·data identity 2/2 PASS. 실제 Sites
+  publish는 프로젝트 규칙상 사용자가 source commit/push한 뒤 owner-only로
+  완료한다. 최신 실행·판정 정본은 `plan_progress.md` 2026-07-14 절.
 
 ## Key files
 
@@ -55,11 +77,13 @@ AGENTS.md                     # codex 진입점 (이 파일과 함께 갱신)
 plan_progress.md              # 계획 + 진행 로그 (블록/세션 종료 시 갱신)
 phase2_results.md             # 결과 canonical (블록 1-9, 정정 이력 포함)
 results/phase3/               # Phase 3 결과 md + CSV + scripts/ (재현 코드)
+results/kbo/K0_FEASIBILITY.md # K0 공식 source/schema/권리 gate 정본
+dashboard/                    # D0 retrospective 연구 dashboard (Sites-ready)
 Kang_2025_TJS_Prediction.md   # 원 논문 layout-aware 전사본 (수치 기준점)
 kang_repo_audit.md            # upstream 코드 감사 + 환경 기록 (함정 목록)
 reproduction_and_dataset.md   # 재현 검토 + 데이터셋 정의 (라벨 신뢰: E0A)
 KBO_applicability.md          # KBO 이전 전략 검토
-PROJECT_RETROSPECTIVE.md      # 회고 (숫자의 여정, 통한 것/안 통한 것)
+progress_MLB.md               # 7/8 이후 진행 정리 (일반 독자용 — 입출력·feature·해석·감사·동결)
 src/download_statcast.py      # Statcast 다운로드 (2016-2025) → data/raw/
 src/extract.py                # final_df 재구축 (upstream 1:1 + 마커)
 src/run_phase2.py             # Phase 2 변형 러너 (VARIANTS 레지스트리)

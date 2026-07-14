@@ -8,10 +8,16 @@ vs canonical plain hazard (M_sa + scalar s, fit train+valid), mature test
   (iii) cluster-level full-refit bootstrap: B=200 resamples of FIT pitchers
         (seed 0), refit hazard each time, ROC on the fixed mature test ->
         percentile CI reflecting fit-side cluster uncertainty.
-  (iv)  one-landmark-per-surgery: keep each fit surgery's positive interval
-        row only at the landmark closest to surgery (min surg-t); other
-        landmarks keep their negative intervals only.
-Feature build identical to v_codex.py (v4 data). Output: ../a0_sens.csv.
+  (iv)  historical outcome-dependent stress: keep each fit surgery's positive
+        interval only at the landmark closest to surgery; earlier negative
+        rows remain. This is retained for history, not called deduplication.
+  (v)   outcome-blind single-landmark sensitivity (pre-specified rule): before
+        examining labels, retain the earliest eligible decision date within
+        each (pitcher, calendar season). Keep all person-period rows belonging
+        to those selected windows. Report fit-only and same-rule evaluation.
+
+Feature build identical to v_codex.py (v4 data). The historical ../a0_sens.csv
+is intentionally not overwritten. Corrected output: ../a0_sens_corrected.csv.
 """
 from __future__ import annotations
 import time
@@ -142,21 +148,36 @@ def fit_hz(X, s, y, weight=None, cat_s=False):
 REL_END = np.datetime64("2024-12-31")
 te_base = (fold == "test") & (year_all <= 2024)
 test_masks = {H: te_base & ((t_all + np.timedelta64(H, "D")) <= REL_END) for H in (90, 150)}
-test_X = {H: Xall[test_masks[H]] for H in (90, 150)}
-test_y = {H: cohort[f"label_H{H}_B0"].values.astype(int)[test_masks[H]] for H in (90, 150)}
-
-def test_roc(model, cat_s=False):
+def test_roc(model, cat_s=False, masks=None):
+    """Evaluate final-window P(H) on supplied outcome-independent masks."""
     sc, hz = model
+    masks = test_masks if masks is None else masks
     out = {}
     for H, smax in ((90, 3), (150, 5)):
-        Xt = test_X[H]
+        mask = masks[H]
+        Xt = Xall[mask]
+        y = cohort[f"label_H{H}_B0"].values.astype(int)[mask]
         h = np.empty((Xt.shape[0], S_MAX))
         for s in range(S_MAX):
             scol = (np.eye(S_MAX)[s][1:] * np.ones((Xt.shape[0], S_MAX - 1))) if cat_s else np.full((Xt.shape[0], 1), float(s))
             h[:, s] = hz.predict_proba(sc.transform(np.hstack([Xt, scol])))[:, 1]
         p = 1 - np.prod(1 - h[:, :smax], axis=1)
-        out[H] = roc_auc_score(test_y[H], p)
+        out[H] = roc_auc_score(y, p)
     return out
+
+def first_eligible_pitcher_season(mask):
+    """Choose first t per pitcher-season without reading outcome columns."""
+    candidate = np.where(mask)[0]
+    frame = pd.DataFrame({
+        "row": candidate,
+        "pitcher": pid_all[candidate],
+        "year": year_all[candidate],
+        "t": t_all[candidate],
+    }).sort_values(["pitcher", "year", "t", "row"])
+    chosen = frame.groupby(["pitcher", "year"], sort=False)["row"].first().values
+    selected = np.zeros(N, dtype=bool)
+    selected[chosen.astype(int)] = True
+    return selected
 
 canon = fit_hz(Xf, sf, yf)
 roc_c = test_roc(canon)
@@ -188,7 +209,85 @@ out.append(dict(variant="categorical_s", H90=round(r[90], 4), H150=round(r[150],
                 d90=round(r[90] - roc_c[90], 4), d150=round(r[150] - roc_c[150], 4), note=""))
 print(f"categorical_s: H90 {r[90]:.4f} ({r[90]-roc_c[90]:+.4f})  H150 {r[150]:.4f} ({r[150]-roc_c[150]:+.4f})")
 
-# (iv) one landmark per surgery (closest to surgery)
+# (v) outcome-blind single-landmark sensitivity. Selection is performed only
+# from pitcher, calendar year, decision date, eligibility/fold, and maturity
+# boundary. No surgery date or label column enters first_eligible_pitcher_season.
+fit_first_window = first_eligible_pitcher_season(fit_mask)
+keep_pp_first = fit_first_window[wf]
+test_first_masks = {
+    H: first_eligible_pitcher_season(test_masks[H]) for H in (90, 150)
+}
+assert int(keep_pp_first.sum()) > 0
+assert np.all(fit_first_window <= fit_mask)
+for H in (90, 150):
+    assert np.all(test_first_masks[H] <= test_masks[H])
+
+mdl_first = fit_hz(Xf[keep_pp_first], sf[keep_pp_first], yf[keep_pp_first])
+r_first_fit_all_eval = test_roc(mdl_first)
+r_canon_first_eval = test_roc(canon, masks=test_first_masks)
+r_first_fit_first_eval = test_roc(mdl_first, masks=test_first_masks)
+fit_first_n = int(fit_first_window.sum())
+fit_first_pos = int(yf[keep_pp_first].sum())
+eval_counts = {
+    H: (
+        int(test_first_masks[H].sum()),
+        int(cohort[f"label_H{H}_B0"].values.astype(int)[test_first_masks[H]].sum()),
+    )
+    for H in (90, 150)
+}
+rule = "earliest eligible t per (pitcher, calendar year); labels/surgery dates unused"
+out.append(dict(
+    variant="outcome_blind_first_pitcher_season_fit_only",
+    H90=round(r_first_fit_all_eval[90], 4), H150=round(r_first_fit_all_eval[150], 4),
+    d90=round(r_first_fit_all_eval[90] - roc_c[90], 4),
+    d150=round(r_first_fit_all_eval[150] - roc_c[150], 4),
+    delta_reference="canonical on all mature test landmarks",
+    selection_uses_outcome=False, fit_landmark_rule=rule,
+    eval_landmark_rule="all mature test landmarks",
+    n_fit_windows=fit_first_n, n_fit_positive_intervals=fit_first_pos,
+    n_eval_H90=int(test_masks[90].sum()),
+    positive_windows_eval_H90=int(cohort["label_H90_B0"].values.astype(int)[test_masks[90]].sum()),
+    n_eval_H150=int(test_masks[150].sum()),
+    positive_windows_eval_H150=int(cohort["label_H150_B0"].values.astype(int)[test_masks[150]].sum()),
+    note="fit-side repeated-landmark sensitivity; evaluation unchanged",
+))
+out.append(dict(
+    variant="canonical_first_pitcher_season_eval",
+    H90=round(r_canon_first_eval[90], 4), H150=round(r_canon_first_eval[150], 4),
+    d90=round(r_canon_first_eval[90] - roc_c[90], 4),
+    d150=round(r_canon_first_eval[150] - roc_c[150], 4),
+    delta_reference="canonical on all mature test landmarks (estimand changes)",
+    selection_uses_outcome=False, fit_landmark_rule="all fit landmarks",
+    eval_landmark_rule=rule, n_fit_windows=int(fit_idx.size),
+    n_fit_positive_intervals=int(yf.sum()),
+    n_eval_H90=eval_counts[90][0], positive_windows_eval_H90=eval_counts[90][1],
+    n_eval_H150=eval_counts[150][0], positive_windows_eval_H150=eval_counts[150][1],
+    note="evaluation-side sensitivity; delta is descriptive across estimands",
+))
+out.append(dict(
+    variant="outcome_blind_first_pitcher_season_fit_eval",
+    H90=round(r_first_fit_first_eval[90], 4), H150=round(r_first_fit_first_eval[150], 4),
+    d90=round(r_first_fit_first_eval[90] - r_canon_first_eval[90], 4),
+    d150=round(r_first_fit_first_eval[150] - r_canon_first_eval[150], 4),
+    delta_reference="canonical fitted model on same first-landmark evaluation set",
+    selection_uses_outcome=False, fit_landmark_rule=rule,
+    eval_landmark_rule=rule, n_fit_windows=fit_first_n,
+    n_fit_positive_intervals=fit_first_pos,
+    n_eval_H90=eval_counts[90][0], positive_windows_eval_H90=eval_counts[90][1],
+    n_eval_H150=eval_counts[150][0], positive_windows_eval_H150=eval_counts[150][1],
+    note="fully outcome-blind one-landmark-per-pitcher-season sensitivity",
+))
+print(
+    "outcome-blind first pitcher-season: "
+    f"fit windows={fit_first_n}, positive intervals={fit_first_pos}; "
+    f"fit-only/all-eval H90/H150={r_first_fit_all_eval[90]:.4f}/{r_first_fit_all_eval[150]:.4f}; "
+    f"canonical first-eval={r_canon_first_eval[90]:.4f}/{r_canon_first_eval[150]:.4f}; "
+    f"first-fit first-eval={r_first_fit_first_eval[90]:.4f}/{r_first_fit_first_eval[150]:.4f}"
+)
+
+# (iv) historical outcome-dependent stress (closest positive to surgery).
+# It deletes only duplicate positive interval rows and leaves their earlier
+# negative rows, so it is deliberately not called physical deduplication.
 best_lm = {}
 for (i, s), sd in surg_of.items():
     if not fit_mask[i]:
@@ -205,10 +304,15 @@ for r_ in pos_rows:
         drop[r_] = True
 mdl = fit_hz(Xf[~drop], sf[~drop], yf[~drop])
 r = test_roc(mdl)
-out.append(dict(variant="one_landmark_per_surgery", H90=round(r[90], 4), H150=round(r[150], 4),
+out.append(dict(variant="historical_outcome_dependent_closest_surgery_positive_only",
+                H90=round(r[90], 4), H150=round(r[150], 4),
                 d90=round(r[90] - roc_c[90], 4), d150=round(r[150] - roc_c[150], 4),
-                note=f"dropped {int(drop.sum())} of {len(pos_rows)} pos rows"))
-print(f"one_landmark: H90 {r[90]:.4f} ({r[90]-roc_c[90]:+.4f})  H150 {r[150]:.4f} ({r[150]-roc_c[150]:+.4f})  "
+                delta_reference="canonical on all mature test landmarks",
+                selection_uses_outcome=True,
+                fit_landmark_rule="closest positive landmark selected using surgery date; negatives retained",
+                eval_landmark_rule="all mature test landmarks",
+                note=f"historical stress: dropped {int(drop.sum())} of {len(pos_rows)} positive rows"))
+print(f"historical outcome-dependent stress: H90 {r[90]:.4f} ({r[90]-roc_c[90]:+.4f})  H150 {r[150]:.4f} ({r[150]-roc_c[150]:+.4f})  "
       f"dropped {int(drop.sum())}/{len(pos_rows)} pos rows")
 
 # (iii) cluster-level full-refit bootstrap, B=200, seed 0
@@ -239,5 +343,6 @@ for H in (90, 150):
     print(f"refit bootstrap H={H}: mean {arr.mean():.4f}  CI [{lo:.4f},{hi:.4f}]  (test-side canonical CI: "
           f"{'0.643-0.759' if H==90 else '0.645-0.746'})")
 
-pd.DataFrame(out).to_csv(OUT / "a0_sens.csv", index=False)
-print(f"\n[t={time.time()-t0:.0f}s] wrote {OUT / 'a0_sens.csv'}")
+corrected_path = OUT / "a0_sens_corrected.csv"
+pd.DataFrame(out).to_csv(corrected_path, index=False)
+print(f"\n[t={time.time()-t0:.0f}s] wrote {corrected_path}")

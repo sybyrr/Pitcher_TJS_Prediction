@@ -2,6 +2,17 @@
 
 결론: **partial_news_based**
 
+> **정정 (2026-07-13, codex KBO 계획 감사):** 공개 뉴스 자료는
+> complete 0/1 label set이나 성능의 lower-bound validation set이 아니다.
+> 확인된 사례는 **positive-unlabeled(PU) 확정 양성 registry**이고,
+> 미보도자는 음성이 아니라 unknown이다. 아래 "하한 검증 세트" 표현은
+> **확인 사건 수의 하한**으로만 제한한다. 내부 complete ascertainment 전
+> 뉴스 라벨 재적합·ROC/PR/Brier·calibration·절대확률 평가는 금지하며,
+> 공개 단계는 확정 사례의 rank/lead 기술통계와 source audit에 한정한다.
+> KBO가 exact TJS/UCLR surgery registry를 보유한다고도 단정하지 않는다;
+> 확인된 것은 IL 관련 제출 경로이며 surgery DB의 존재·형태는 협조 시
+> 별도 확인 대상이다.
+
 ## 소스별 상세
 
 ### 나무위키 - 토미 존 수술/피시술자 (crowd-sourced recipients list)

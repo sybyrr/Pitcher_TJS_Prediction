@@ -1,0 +1,10 @@
+variant,H90,H150,d90,d150,note,delta_reference,selection_uses_outcome,fit_landmark_rule,eval_landmark_rule,n_fit_windows,n_fit_positive_intervals,n_eval_H90,positive_windows_eval_H90,n_eval_H150,positive_windows_eval_H150
+canonical,0.7009,0.6958,0.0,0.0,,,,,,,,,,,
+event_weighted,0.6725,0.6696,-0.0284,-0.0262,"pos rows 252, distinct fit surgeries 79",,,,,,,,,,
+categorical_s,0.7008,0.6958,-0.0,-0.0,,,,,,,,,,,
+outcome_blind_first_pitcher_season_fit_only,0.6225,0.625,-0.0783,-0.0708,fit-side repeated-landmark sensitivity; evaluation unchanged,canonical on all mature test landmarks,False,"earliest eligible t per (pitcher, calendar year); labels/surgery dates unused",all mature test landmarks,3251.0,55.0,12085.0,169.0,11395.0,225.0
+canonical_first_pitcher_season_eval,0.6495,0.6435,-0.0514,-0.0523,evaluation-side sensitivity; delta is descriptive across estimands,canonical on all mature test landmarks (estimand changes),False,all fit landmarks,"earliest eligible t per (pitcher, calendar year); labels/surgery dates unused",16949.0,252.0,2308.0,42.0,2290.0,64.0
+outcome_blind_first_pitcher_season_fit_eval,0.5642,0.585,-0.0853,-0.0585,fully outcome-blind one-landmark-per-pitcher-season sensitivity,canonical fitted model on same first-landmark evaluation set,False,"earliest eligible t per (pitcher, calendar year); labels/surgery dates unused","earliest eligible t per (pitcher, calendar year); labels/surgery dates unused",3251.0,55.0,2308.0,42.0,2290.0,64.0
+historical_outcome_dependent_closest_surgery_positive_only,0.5965,0.5923,-0.1044,-0.1036,historical stress: dropped 173 of 252 positive rows,canonical on all mature test landmarks,True,closest positive landmark selected using surgery date; negatives retained,all mature test landmarks,,,,,,
+refit_boot_H90,,,,,"mean 0.6682 CI [0.5971,0.7015] B=200",,,,,,,,,,
+refit_boot_H150,,,,,"mean 0.6642 CI [0.5999,0.7002] B=200",,,,,,,,,,

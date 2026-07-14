@@ -9,9 +9,13 @@ Sensitivities: (a) temporal leave-one-year-out cross-fit (same recal form);
 (b) marginal per-H Platt on window-level OOF P(H) — reference only, may
 break P90<=P150 (violation count reported).
 Report on mature test (t+H<=2024-12-31) AND safety boundary (<=2024-06-30):
-calibration-in-the-large, recal slope, Brier, decile reliability, ROC
-before/after. Report-only; ranking metrics stay canonical.
-Feature build identical to v_codex.py (v4 data). Output: ../a0_recal.csv.
+mean prediction error, standard calibration intercept (slope fixed at 1),
+joint calibration intercept/slope, Brier, reliability, and ROC before/after.
+The final-window P(H) diagnostics from pitcher-grouped OOF predictions are
+persisted separately. Report-only; ranking metrics stay canonical.
+
+The historical ../a0_recal.csv is intentionally not overwritten. Corrected
+outputs: ../a0_recal_corrected.csv and ../a0_recal_oof_window.csv.
 """
 from __future__ import annotations
 import time
@@ -146,6 +150,75 @@ def logit(p):
     p = np.clip(p, eps, 1 - eps)
     return np.log(p / (1 - p))
 
+def expit(x):
+    """Numerically stable inverse logit."""
+    x = np.asarray(x, dtype=float)
+    out = np.empty_like(x)
+    pos = x >= 0
+    out[pos] = 1.0 / (1.0 + np.exp(-x[pos]))
+    ex = np.exp(x[~pos])
+    out[~pos] = ex / (1.0 + ex)
+    return out
+
+def calibration_parameters(y, p):
+    """Return unpenalized calibration intercept (slope 1) and joint fit."""
+    y = np.asarray(y, dtype=float)
+    z = logit(np.asarray(p, dtype=float))
+
+    # Standard calibration intercept: logit(y) = a + 1 * logit(p).
+    a_fixed = 0.0
+    for _ in range(100):
+        mu = expit(a_fixed + z)
+        information = np.sum(mu * (1.0 - mu))
+        if information <= 0:
+            raise RuntimeError("degenerate fixed-slope calibration fit")
+        step = np.sum(y - mu) / information
+        a_fixed += step
+        if abs(step) < 1e-12:
+            break
+    fixed_score = float(np.sum(y - expit(a_fixed + z)))
+    if abs(fixed_score) > 1e-7:
+        raise RuntimeError(f"fixed-slope calibration did not converge: score={fixed_score}")
+
+    # Unpenalized logistic calibration model with intercept and slope fitted.
+    design = np.column_stack([np.ones(len(z)), z])
+    beta = np.array([a_fixed, 1.0], dtype=float)
+    for _ in range(100):
+        mu = expit(design @ beta)
+        weight = mu * (1.0 - mu)
+        information = design.T @ (weight[:, None] * design)
+        score = design.T @ (y - mu)
+        try:
+            step = np.linalg.solve(information, score)
+        except np.linalg.LinAlgError:
+            step = np.linalg.lstsq(information, score, rcond=None)[0]
+        beta += step
+        if np.max(np.abs(step)) < 1e-12:
+            break
+    joint_score = design.T @ (y - expit(design @ beta))
+    if np.max(np.abs(joint_score)) > 1e-7:
+        raise RuntimeError(f"joint calibration did not converge: score={joint_score}")
+    return float(a_fixed), float(beta[0]), float(beta[1])
+
+def calibration_metrics(y, p):
+    """Window-level calibration and discrimination diagnostics."""
+    y = np.asarray(y, dtype=int)
+    p = np.asarray(p, dtype=float)
+    a_fixed, a_joint, b_joint = calibration_parameters(y, p)
+    decile = pd.qcut(p, 10, labels=False, duplicates="drop")
+    reliability = pd.DataFrame({"bin": decile, "p": p, "y": y}).groupby(
+        "bin", observed=True
+    ).agg(n=("y", "size"), positive_windows=("y", "sum"), mean_pred=("p", "mean"),
+          observed_rate=("y", "mean"))
+    metrics = dict(
+        n=len(y), positive_windows=int(y.sum()), prevalence=float(y.mean()),
+        mean_pred=float(p.mean()), mean_error=float(p.mean() - y.mean()),
+        cal_intercept_fixed_slope1=a_fixed,
+        cal_intercept_joint=a_joint, cal_slope_joint=b_joint,
+        brier=float(brier_score_loss(y, p)), roc=float(roc_auc_score(y, p)),
+    )
+    return metrics, reliability
+
 # ---- primary: pitcher-grouped 5-fold OOF at interval level ----
 Xf, sf, yf, wf = pp_rows(fit_idx)
 groups = pid_all[wf]
@@ -202,19 +275,50 @@ for H in (90, 150):
     platt[H] = LogisticRegression(max_iter=2000).fit(logit(pw).reshape(-1, 1), yw)
     print(f"  marginal Platt H={H}: a={float(platt[H].intercept_[0]):+.4f} b={float(platt[H].coef_[0][0]):.4f}")
 
+# ---- corrected final-window grouped-OOF diagnostics ----
+# Pre-specified unit: every eligible fit window. Each pitcher's windows are
+# predicted exclusively by a fold model that did not see that pitcher.
+oof_rows = []
+oof_violations = int(np.sum(oof_P[90][fit_idx] > oof_P[150][fit_idx] + 1e-12))
+for H in (90, 150):
+    p = oof_P[H][fit_idx]
+    y = cohort[f"label_H{H}_B0"].values.astype(int)[fit_idx]
+    assert not np.isnan(p).any()
+    metrics, reliability = calibration_metrics(y, p)
+    oof_rows.append(dict(
+        scope="fit_2017_2021_pitcher_grouped_oof",
+        prediction_level="final_window_P(H)", record_type="summary",
+        H=H, bin=np.nan, fold_count=5,
+        n_pitchers=int(np.unique(pid_all[fit_idx]).size),
+        monotonicity_violations=oof_violations, **metrics,
+    ))
+    for bin_id, row in reliability.iterrows():
+        oof_rows.append(dict(
+            scope="fit_2017_2021_pitcher_grouped_oof",
+            prediction_level="final_window_P(H)", record_type="reliability_bin",
+            H=H, bin=int(bin_id), fold_count=5,
+            n_pitchers=np.nan, monotonicity_violations=np.nan,
+            n=int(row["n"]), positive_windows=int(row["positive_windows"]),
+            prevalence=float(row["observed_rate"]),
+            mean_pred=float(row["mean_pred"]), mean_error=np.nan,
+            cal_intercept_fixed_slope1=np.nan, cal_intercept_joint=np.nan,
+            cal_slope_joint=np.nan, brier=np.nan, roc=np.nan,
+        ))
+    print(
+        f"grouped-OOF final P(H={H}): n={metrics['n']} "
+        f"positive-windows={metrics['positive_windows']} "
+        f"prev={metrics['prevalence']:.4%} mean-pred={metrics['mean_pred']:.4%} "
+        f"cal-int(slope=1)={metrics['cal_intercept_fixed_slope1']:+.4f} "
+        f"joint a={metrics['cal_intercept_joint']:+.4f} "
+        f"b={metrics['cal_slope_joint']:.4f}"
+    )
+oof_path = OUT / "a0_recal_oof_window.csv"
+pd.DataFrame(oof_rows).to_csv(oof_path, index=False)
+print(f"[t={time.time()-t0:.0f}s] wrote {oof_path}; P90>P150={oof_violations}")
+
 BOUNDS = {"mature_20241231": np.datetime64("2024-12-31"),
           "safety_20240630": np.datetime64("2024-06-30")}
 te_base = (fold == "test") & (year_all <= 2024)
-
-def calib_metrics(y, p):
-    citl = p.mean() - y.mean()
-    sl = LogisticRegression(max_iter=2000).fit(logit(p).reshape(-1, 1), y)
-    dec = pd.qcut(p, 10, labels=False, duplicates="drop")
-    rel = pd.DataFrame({"d": dec, "p": p, "y": y}).groupby("d").agg(
-        n=("y", "size"), mean_pred=("p", "mean"), obs=("y", "mean"))
-    return dict(prev=y.mean(), mean_pred=p.mean(), citl=citl,
-                slope=float(sl.coef_[0][0]), brier=brier_score_loss(y, p),
-                roc=roc_auc_score(y, p)), rel
 
 out = []
 for bname, bend in BOUNDS.items():
@@ -224,14 +328,27 @@ for bname, bend in BOUNDS.items():
         p_raw = window_p(m)[H]
         p_grp = window_p(m, recal=(a_grp, b_grp))[H]
         p_ty = window_p(m, recal=(a_ty, b_ty))[H]
-        for vname, p in (("raw", p_raw), ("recal_grouped", p_grp), ("recal_temporal", p_ty)):
-            met, rel = calib_metrics(y, p)
-            out.append(dict(boundary=bname, H=H, variant=vname, **{k: round(v, 6) for k, v in met.items()}))
+        variants = (
+            ("raw", p_raw, 0.0, 1.0),
+            ("recal_grouped", p_grp, a_grp, b_grp),
+            ("recal_temporal", p_ty, a_ty, b_ty),
+        )
+        for vname, p, recal_a, recal_b in variants:
+            met, rel = calibration_metrics(y, p)
+            out.append(dict(
+                boundary=bname, H=H, variant=vname, record_type="summary",
+                interval_recal_intercept=recal_a,
+                interval_recal_slope=recal_b,
+                monotonicity_violations=np.nan, **met,
+            ))
             if vname != "raw" or bname == "mature_20241231":
-                print(f"{bname} H={H} {vname:15s} prev {met['prev']:.4%} mean-pred {met['mean_pred']:.4%} "
-                      f"slope {met['slope']:.3f} Brier {met['brier']:.6f} ROC {met['roc']:.4f}")
+                print(f"{bname} H={H} {vname:15s} prev {met['prevalence']:.4%} "
+                      f"mean-pred {met['mean_pred']:.4%} "
+                      f"cal-int(slope=1) {met['cal_intercept_fixed_slope1']:+.3f} "
+                      f"joint a/b {met['cal_intercept_joint']:+.3f}/{met['cal_slope_joint']:.3f} "
+                      f"Brier {met['brier']:.6f} ROC {met['roc']:.4f}")
         if bname == "mature_20241231":
-            _, rel = calib_metrics(y, p_grp)
+            _, rel = calibration_metrics(y, p_grp)
             print(f"  reliability (grouped recal), deciles:\n{rel.round(5).to_string()}")
     # joint-consistency check on the H90-boundary window set
     m90 = te_base & ((t_all + np.timedelta64(90, "D")) <= bend)
@@ -242,10 +359,16 @@ for bname, bend in BOUNDS.items():
     n_viol_platt = int((pj_platt90 > pj_platt150 + 1e-12).sum())
     print(f"{bname}: P90<=P150 violations — joint hazard recal {n_viol} / marginal Platt {n_viol_platt} "
           f"(of {int(m90.sum())})")
-    out.append(dict(boundary=bname, H=0, variant="viol_joint", prev=np.nan, mean_pred=np.nan,
-                    citl=np.nan, slope=np.nan, brier=np.nan, roc=n_viol))
-    out.append(dict(boundary=bname, H=0, variant="viol_platt", prev=np.nan, mean_pred=np.nan,
-                    citl=np.nan, slope=np.nan, brier=np.nan, roc=n_viol_platt))
+    for vname, violations in (("viol_joint", n_viol), ("viol_platt", n_viol_platt)):
+        out.append(dict(
+            boundary=bname, H=0, variant=vname, record_type="consistency_check",
+            interval_recal_intercept=np.nan, interval_recal_slope=np.nan,
+            monotonicity_violations=violations, n=int(m90.sum()), positive_windows=np.nan,
+            prevalence=np.nan, mean_pred=np.nan, mean_error=np.nan,
+            cal_intercept_fixed_slope1=np.nan, cal_intercept_joint=np.nan,
+            cal_slope_joint=np.nan, brier=np.nan, roc=np.nan,
+        ))
 
-pd.DataFrame(out).to_csv(OUT / "a0_recal.csv", index=False)
-print(f"\n[t={time.time()-t0:.0f}s] wrote {OUT / 'a0_recal.csv'}")
+corrected_path = OUT / "a0_recal_corrected.csv"
+pd.DataFrame(out).to_csv(corrected_path, index=False)
+print(f"\n[t={time.time()-t0:.0f}s] wrote {corrected_path}")

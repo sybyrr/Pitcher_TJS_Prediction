@@ -10,7 +10,10 @@ KBO 이전. 이 파일은 codex용 진입점이며, Claude Code의 진입점
 1. `PROJECT_MEMORY.md` — 작업 원칙(사용자 지시 이력), 동결 프로토콜,
    **canonical 수치와 인용 금지 목록**, 기각 이력, 현재 계획, 데이터 지도
 2. `plan_progress.md` — 계획(G1–G3) + 세션별 진행 로그 (최신 절이 현재
-   상태; 승인 블록의 canonical 실행 사양 = "2026-07-13 (계속 3)" 사양 v2)
+   상태; MLB 승인 블록의 canonical 실행 사양 = "2026-07-13 (계속 3)"
+   사양 v2, KBO 이전 canonical 제안 = "2026-07-13 (계속 7)" 계획 v2,
+   실행 전 감사·dashboard 추가 = "2026-07-13 (계속 8)", **실행 결과·K0
+   판정·현재 대기 작업 = "2026-07-14" 최신 절**)
 3. `phase2_results.md` — 결과 canonical (블록 1–9; 정정은 덧붙임 표기)
 4. `results/phase3/FROZEN_MODEL.md` — **동결 모델·인용 수치의 최종 단일
    원본** (2026-07-13 동결: 계수·재보정·경보 정책·전향 확인 프로토콜).
@@ -27,8 +30,9 @@ KBO 이전. 이 파일은 codex용 진입점이며, Claude Code의 진입점
   `data/`, `TJS_Prediction/` — 저자 final_df.csv 업로드 절대 금지).
 - **라벨은 TJS-only 고정** (팀원의 distance-based 트랙과 충돌 방지;
   IL 라벨 확장 금지). arm-IL feature는 A-IL 블록에서 검정 완료 —
-  blackout 게이트 실패로 **canonical 금지, triage 재검정 후보로만**
-  (AIL_RESULTS.md 정정 헤더 참조).
+  corrected 60d 방향은 양/양이지만 결과 확인 뒤 parser 보수+CI 0 포함으로
+  confirmatory가 아니므로 **canonical 금지, triage 재검정 후보로만**
+  (AIL_RESULTS.md 2026-07-14 정정 헤더 참조).
 - `TJS_Prediction/`(upstream 클론) 수정 금지.
 - 동결 프로토콜(코호트·fold·clustered bootstrap seed 0·anchor 게이트·
   paired 판정) 변경 금지. 새 변형은 게이트 재현 후 paired delta로만 평가.
