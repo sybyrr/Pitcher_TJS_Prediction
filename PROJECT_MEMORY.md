@@ -135,7 +135,7 @@
     금지.** 2025 점수 아카이브 = frozen_scores_2025 (SHA-256 기록).
   - **2026년 4-7월 채점 = label-blind delayed shadow backfill** (진짜
     전향 아님 — 결정일이 채점일보다 과거; codex 3차 재분류). **첫 진짜
-    전향 cohort = 2026-08-01을 당일 이전 채점·해시·저장** (상태 로드
+    전향 cohort = 2026-08-01을 당일 또는 이전에 채점·해시·저장** (상태 로드
     방식, append-only, 사용자 git commit/tag로 증빙).
 - **M1/M2 완료 (2026-07-14; canonical 로그 = plan_progress.md 최신 절)**:
   M1 A0/A1/A-IL의 코드·corrected CSV/parquet·결정 메모를 독립 재실행까지
@@ -149,7 +149,7 @@
   경보 정책 이전, **계수·quota는 KBO 재적합/재선택**) + 제안서(사용자
   직접 작성, 재료: phase2_results 블록 6-9 + FROZEN_MODEL.md +
   **progress_MLB.md**(7/8 이후 일반 독자용 정리 — 구
-  PROJECT_RETROSPECTIVE.md 대체)) + **2026-08-01 사전 채점(8/1 전)** +
+  PROJECT_RETROSPECTIVE.md 대체)) + **2026-08-01 채점(당일 또는 이전)** +
   봉인 파일 git 커밋(사용자) + 2025 robustness(~2027) + **D0 source
   commit/push 뒤 owner-only Sites publish**.
 - **K0 완료 (2026-07-14): `PARTIAL`, K1 자동수집 `NO-GO`**. 공식 KBO
@@ -161,6 +161,14 @@
   기사는 PU이므로 refit/ROC/PR/calibration 금지. 다음은 권리 확보 뒤 소수
   경기 B7 schema/completeness pilot이며 상세 정본은
   `results/kbo/K0_FEASIBILITY.md`.
+- **K0 후속 사용자 결정 (2026-07-14)**: 사용자는 과거 KBO 홈페이지
+  수집 경험과 네이버 문자중계의 PTS 구속 경로를 제시하고, 팀원 대신
+  Codex가 수집을 맡는 방향을 선택했다. 기존 K0는 당시 확인 범위의 보수적
+  감사 기록으로 보존하되, 다음 실행 후보는 결과를 보지 않는 소규모
+  source/schema/coverage pilot이다. KBO 공식 PC를 B7 정본으로 하고
+  V9는 PTS/TrackMan 측정계·coverage gate를 통과한 별도 후보로 둔다.
+  공개 TJS 기사의 PU 한계와 `unknown != negative`는 불변이다. 저장소
+  인계 정비를 먼저 수행했으며 KBO 수집 자체는 아직 시작하지 않았다.
 - **KBO 이전 계획 v2 유지 (K0 판정 반영)**: 공개 뉴스는 complete 0/1
   label이 아닌 PU 확정 사례 registry다. 권리 gate 통과 후 K1-F B7/V9
   exposure + K1-L 확정 사례 registry →
@@ -178,6 +186,14 @@
   production dependency audit는 0건(postcss 8.5.14 override)이다.
   사용자 source commit/push 뒤 owner-only로 배포한다. KBO adapter/실명
   운영 gate는 기존 K4–K6 제한을 유지한다.
+- **팀 인계 정비 완료 (2026-07-14)**: 사람용 루트 `README.md`를 추가하고
+  `.gitignore`의 root data rule을 `/data/`로 고쳐
+  `dashboard/public/data/{demo_test_top20.csv,manifest.json}`이 Git 추적
+  대상이 되게 했다. README link 17/17, dashboard build/test 2/2 PASS.
+  Drive 기본 묶음은 current v4/GS/TJS/vdecay 약 29MB이며 raw·A-IL·저자
+  자료는 역할별 선택/제한 공유한다. M2 golden regression까지 인계할 때는
+  legacy `gs_flags_v1.parquet` fixture도 포함한다. 상세 로그는
+  `plan_progress.md` 최신 절.
 - **KBO 이전**: 이전 대상은 정의·feature 계산법·검열/보정 절차·role-aware
   평가·경보 정책 — **계수는 KBO 재적합** (MLB 계수 이식 금지). KBO
   부상자명단 제도는 내부 의무기록 접근을 요청할 근거이지만, 정확한 TJS/UCLR
@@ -206,6 +222,7 @@
 - `results/kbo/K0_FEASIBILITY.md`: K0 공식 source/schema/권리 gate 정본.
 - `dashboard/`: D0 retrospective 연구 대시보드 source + byte-locked demo
   asset/manifest; 로컬 production PASS, owner-only Sites publish 대기.
+- `README.md`: 사람용 저장소 진입점(읽기 순서·현재 상태·환경·데이터 경계).
 - canonical 문서 역할: `phase2_results.md`(결과 이력) /
   `plan_progress.md`(계획+로그) / P_BLOCK_RESULTS.md(수치 정정 이력) /
   **FROZEN_MODEL.md(동결 모델·인용 수치의 최종 단일 원본)**

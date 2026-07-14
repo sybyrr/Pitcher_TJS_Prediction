@@ -1,0 +1,12 @@
+{
+  "artifact": "demo_test_top20.csv",
+  "scope": "Retrospective top-20 excerpt from the canonical q0 top-50 queue",
+  "source": "results/phase3/demo_test_top20.csv",
+  "rows": 360,
+  "decision_dates": 18,
+  "data_sha256": "d2f68cd38bbd5cdbb9bd5009280f5afaf534db0eea494312e95c4c083ade1228",
+  "model_state_sha256": "e14ba800227a5b65a12ca55114e106e20a4636857ef947d5997b9e496e02fac8",
+  "social_asset_sha256": "c8298f082fc529653ca8ba20edb779bacb45457568c93cea30c0b2fb815f8311",
+  "policy": "q0",
+  "prospective": false
+}

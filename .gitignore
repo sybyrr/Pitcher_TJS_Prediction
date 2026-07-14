@@ -1,20 +1,32 @@
-# environment
-.venv/
+# Local environments and credentials
+/.venv/
+/.env
+/.env.*
+!/.env.example
 
-# editor
-.vscode/
+# Editor and OS state
+/.vscode/
+.DS_Store
+Thumbs.db
 
-# upstream reference clone (re-clone: git clone https://github.com/dxlabskku/TJS_Prediction.git)
-# also holds the authors' final_df.csv (136MB, shared privately - never commit)
-TJS_Prediction/
+# Upstream reference clone. Re-clone from:
+# https://github.com/dxlabskku/TJS_Prediction.git
+# The local clone also contains the authors' private final_df.csv; never commit it.
+/TJS_Prediction/
 
-# python artifacts
+# Python artifacts and tool caches
 __pycache__/
-*.pyc
-
-# large data / caches (statcast parquet, final_df, checkpoints, logs)
-data/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 .cache/
+
+# Root research data. Keep this rule anchored so dashboard/public/data remains
+# versioned with the dashboard source.
+/data/
+
+# Large or regeneratable binary artifacts outside /data
 *.pth
 *.pt
 *.parquet
@@ -22,5 +34,6 @@ data/
 *.npy
 *.log
 
-# regeneratable prediction dumps (keep results/*.csv tracked)
-results/preds/
+# Regeneratable prediction dumps; decision CSVs under results/ stay tracked.
+/results/preds/
+/results/phase2/preds/
